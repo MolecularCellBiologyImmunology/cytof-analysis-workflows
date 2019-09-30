@@ -1,0 +1,254 @@
+---
+title: "CyTOF Titration Concentration Scorer"
+author: "Michael de Kok"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    toc: yes
+    theme: united
+    css: style.css
+params:
+  pregating_channels: 
+    label: "If the following channels exist, assign them to Pregating Channels, seperated by spaces."
+    value: "Ce140Di BEADS Ir191Di DNA1 Ir193Di DNA2 Rh103Di livedead LiveDead LIVEDEAD"
+    input: text
+  instrument_channels: 
+    label: "If the following channels exist, assign them to Instrument Channels, seperated by spaces."
+    value: "Time Event_length Center SampleID Offset Width Residual FileNum"
+    input: text
+  pregates: 
+    label: "Perform the following pregates (with format 'channel{<or>}threshold'), seperated by spaces."
+    value: "Ce140Di<250 Ir191Di>200 Ir191Di<450 Y89Di>10"
+    input: text    
+  markernames: 
+    label: "Show marker names instead of metal names."
+    value: FALSE
+    input: checkbox     
+  arcsinh: 
+    label: "Perform ArcSinh transformation on data."
+    value: TRUE
+    input: checkbox
+  arcsinhcofac: 
+    label: "Cofactor to use during ArcSinh transformation."
+    value: 5
+    input: numeric            
+  scores:
+    label: "Names of score types, seperated by commas.*"
+    value: "Intensity,AOF Score,Concentration Score,Overall / Weighted Score"
+    input: text
+  k: 
+    label: "Size of local neighborhood used for Area Overlap Frequency (AOF) calculation."
+    value: 30
+    input: numeric    
+---
+
+Version: 1.0
+
+Adapted from http://biosurf.wiki/#!/wiki/cytof, Nowicka et al. (2019), Amir et al. (2018), and the unpublished work of Jan Verhoeff
+
+### 0. Installation of Environment (Only once per PC, skipped afterwards)
+
+```{r installation, echo = TRUE, results='hold', message=FALSE}
+
+## Check if all necessary packages are installed
+packages_to_check <- c("scales", "RColorBrewer", "MASS", "Rtsne", "kohonen", "miscTools", "gplots", "Radviz", "igraph", "statmod","dplyr","readr","tibble", "flowCore", "cytofkit", "ConsensusClusterPlus", "cydar", "flowCL", "CATALYST", "ncdfFlow", "edgeR", "FlowSOM", "flowDensity", "devtools", "cytofCore", "cytutils", "Rphenograph", "MEM")
+installation_needed <- (packages_to_check %in% installed.packages())
+installation_needed <- packages_to_check[installation_needed == FALSE]
+if(length(installation_needed) > 0) {print(paste("The following packages are missing:",installation_needed)); stop("Not all necessary packages are installed! Run the Installation Executable.")}
+
+```
+
+### 1. Load Required Packages and Parameters
+
+```{r setup, echo = TRUE, results='hold', warning=TRUE, message=FALSE}
+
+## Set behaviour of functions using randomness to the same version, so results are the same regardless of R version
+RNGversion("3.5.3")
+
+## Load required packages
+require(scales)
+require(RColorBrewer)
+require(MASS)
+require(Rtsne)
+require(kohonen)
+require(miscTools)
+require(gplots)
+require(Radviz)
+require(igraph)
+require(statmod)
+require(readr)
+require(tibble)
+require(Rphenograph)
+require(flowCore)
+require(cytofkit)
+require(ConsensusClusterPlus)
+require(cydar)
+require(flowCL)
+require(CATALYST)
+require(ncdfFlow)
+require(edgeR)
+require(FlowSOM)
+require(cytofCore)
+require(flowDensity)
+require(MEM)
+require(cytutils)
+require(dplyr)
+
+```
+
+### 2. Data Import
+
+```{r import}
+
+## Load and print used parameters for future reference
+load(file = "temp.RData")
+message("Input Files: ", files)
+message("Output Directory: ", outputdir)
+message("User Defined Parameters: ")
+params
+
+## Unzip Zipped files
+#zip_files <- list.files(pattern='.zip$', full=TRUE, ignore.case = TRUE)
+#if (!isEmpty(zip_files)) {unzip(zipfile = zip_files)}
+#fcs_files <- list.files(pattern='.fcs$', full=TRUE, ignore.case = TRUE)
+
+## Concatenate if needed, load the FCS File and print its summary
+if (!concat) {fcs <- read.FCS(filename = files, transformation = FALSE)} else {fcs <- concatFCS(x = files, file_num = TRUE); write.FCS(fcs, filename = paste(outputdir,".fcs",sep=""))}
+exprs <- as.data.frame(fcs@exprs)
+if (is.null(exprs$FileNum)) {stop("This Single File was not concatenated using this Script! Please re-concatenate your file using this script.")}
+fcs@parameters@data
+t(summary(exprs))
+samplenumber <- length(unique(exprs$FileNum))
+
+```
+
+### 3. Data Preprocessing
+
+```{r preprocessing}
+## TODO: Spillover Correction using spillover() function and Spillover Matrix 
+spillovermatrix <- spillover(x = fcs)
+compensate(x = fcs, spillover = spillovermatrix)
+
+## Data Pre-Gating
+pregating <- function(exprs, pregate) {
+  message(paste("Applying Pregate", pregate));
+  if (grepl("<", pregate, fixed=TRUE)) {filterargs <- strsplit(pregate, split = "<")[[1]]; exprs2 <- dplyr::filter(exprs, exprs[,filterargs[1]] < filterargs[2] ) };
+  if (grepl(">", pregate, fixed=TRUE)) {filterargs <- strsplit(pregate, split = ">")[[1]]; exprs2 <- dplyr::filter(exprs, exprs[,filterargs[1]] > filterargs[2] ) };
+  num_removed <- dim(exprs)[1] - dim(exprs2)[1] 
+  print(paste("Pregate", pregate, "applied succesfully.", num_removed, "cells have been filtered out.")) 
+  return(exprs2) }
+
+pregates <- strsplit(params$pregates, split = " ")[[1]] 
+for (pregate in pregates) {exprs <- pregating(exprs, pregate)}
+
+## Channel Description
+pregating_channels <- strsplit(params$pregating_channels, split = " ")[[1]]
+pregating_channels <- pregating_channels[pregating_channels %in% colnames(exprs)]
+instrument_channels <- strsplit(params$instrument_channels, split = " ")[[1]]
+instrument_channels <- instrument_channels[instrument_channels %in% colnames(exprs)]
+lineage_channels <- unlist(colnames(exprs))[!unlist(colnames(exprs)) %in% c(pregating_channels,instrument_channels)]
+
+## Make colnames human readable using information in the parameter data slot
+if (params$markernames) {
+  markers <- gsub(pattern = ".*_", replacement = "", x = as.vector(fcs@parameters@data$desc));
+  colnames(exprs)[which(!is.na(markers))] <- markers[which(!is.na(markers))]
+}
+
+## Bead Normalization: Already performed by software before data import
+## Compensation:       Already performed by software before data import
+## Debarcoding:        Already performed by software before data import
+
+## Arcsinh Data Transformation
+message(paste("Arcsinh Data Transformation enabled:",params$arcsinh)); if (params$arcsinh) {
+  require(MASS)
+  require(RColorBrewer)
+  k <- 11; my.cols <- rev(brewer.pal(k, "RdYlBu"))
+  cofac <- params$arcsinhcofac
+  #plot(exprs[,c("CD8", "CD4")], pch=".", col="grey", main="CD8 vs CD4")
+  #z <- kde2d(exprs[,"CD8"], h = length(exprs[,"CD8"]), exprs[,"CD4"], n=50)
+  #contour(z, drawlabels=FALSE, nlevels=k, col=my.cols, add=TRUE)
+  exprs <- cbind(asinh(exprs[,c(pregating_channels, lineage_channels)]/cofac), exprs[,instrument_channels])
+  #plot(exprs[,c("CD8", "CD4")], pch=".", col="grey", main="CD8 vs CD4 (transformed counts)")
+  #z <- kde2d(exprs[,"CD8"], h = length(exprs[,"CD8"]), exprs[,"CD4"], n=50)
+  #contour(z, drawlabels=FALSE, nlevels=k, col=my.cols, add=TRUE)
+  t(summary(exprs))
+}
+
+
+## TODO: Batch Effects ?!?!
+
+```
+
+### 4. Clustering for Area Overlap Frequency Calculation
+
+```{r clustering, echo = TRUE, results='hold', message=FALSE}
+
+## Cluster Data and calculate AOF for each sample
+AOFScores <- list()
+for (sample in 1:samplenumber) {
+  message("\n")
+  message(paste("Clustering Sample",sample,"out of", samplenumber))
+  sampledata <- dplyr::filter(exprs, exprs$FileNum == sample)
+  Rphenograph_out <- Rphenograph::Rphenograph(sampledata[,lineage_channels], k = 30)
+  AOF <- greedyCytometryAof(fcs_data = sampledata[,lineage_channels], y = Rphenograph_out[[2]]$membership)
+  AOFScores[[sample]] <- column_to_rownames(.data = AOF, var = "ChannelName")
+}
+
+```
+
+### 5. Calculate & Output Score Tables & Graphs
+
+```{r scoring, warning = FALSE }
+
+## Set up Scoring Tables
+scoretypes <- strsplit(params$scores, split = ",")[[1]] 
+nr  <- samplenumber
+nc  <- length(scoretypes)
+ndf <- length(lineage_channels)
+scores <- setNames(replicate(ndf,setNames(as.data.frame(matrix(nrow = nr, ncol = nc)),scoretypes),simplify=FALSE),lineage_channels)
+
+## Set up Output Folder
+if (params$markernames) {dir.create(file.path(outputdir, "Markers"))} else {dir.create(file.path(outputdir, "Metals"))}
+if (params$markernames) {setwd(file.path(outputdir, "Markers"))} else {setwd(file.path(outputdir, "Metals"))}
+
+## Score Titrations
+bestsamples <- list()
+for (marker in lineage_channels) {
+  maxexpression <- quantile(exprs[,marker], 0.99)
+  scores$marker <- as.data.frame(scores$marker)
+  for (sample in 1:samplenumber) {
+    sampledata <- dplyr::filter(exprs, exprs$FileNum == sample)[,marker]
+    scores[[marker]][sample,scoretypes[1]] <- round((quantile(as.numeric(sampledata), 0.99)) / maxexpression, 2)
+    #scores[[marker]][sample,scoretypes[2]] <- round(log((1-AOFScores[[sample]][marker,"Aof"])*100,10)/2,2)
+    scores[[marker]][sample,scoretypes[2]] <- round(1-AOFScores[[sample]][marker,"Aof"],2)
+    scores[[marker]][sample,scoretypes[3]] <- round(sqrt(sample / 10), 2)
+  }
+  
+  ## Corrections for Intensity Scores
+  scores[[marker]][,scoretypes[1]] <- round(scores[[marker]][,scoretypes[1]] / (max(scores[[marker]][,scoretypes[1]])),2)
+  scores[[marker]][scores[[marker]] == "NaN"] <- 0
+  
+  ## Calculate & Print Optimal Score
+  scores[[marker]][,scoretypes[4]] <- round(rowMeans(scores[[marker]][,1:3]),2)
+  bestsamples[[marker]] <- as.numeric(rownames(scores[[marker]])[which.max(scores[[marker]]$`Overall / Weighted Score`)])
+  print(paste("Scores for Marker", marker)); print(scores[[marker]])
+  
+  ## Plot & Save Plot
+  plot(exprs[,c("FileNum", marker)], pch=".", col = exprs$FileNum, main=marker)
+  rect(xleft = bestsamples[[marker]]-0.5, ybottom = 0, xright = bestsamples[[marker]]+0.5, ytop = max(exprs[,marker]), border = "red")
+  if (params$markernames) {png(paste(marker,".png", sep = ""))} else {png(paste(marker,".png", sep = ""))}
+  plot(exprs[,c("FileNum", marker)], pch=".", col = exprs$FileNum, main=marker)
+  rect(xleft = bestsamples[[marker]]-0.5, ybottom = 0, xright = bestsamples[[marker]]+0.5, ytop = max(exprs[,marker]), border = "red")
+  dev.off()
+  
+  ## Write Marker-Specific Score Table
+  write.table(t(as.data.frame(scores[[marker]])), sep = "\t", file = paste(marker," Scores.tsv", sep = ""), col.names = TRUE)}
+
+## Write Summary Table
+setwd(outputdir)
+write.table(t(as.data.frame(bestsamples)), sep = "\t", file = "Optimal Marker Concentrations.tsv", col.names = FALSE)
+
+## Write R Workspace for future analysis
+save.image(file = "R Workspace.Rdata")
+
+```
