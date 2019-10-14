@@ -24,7 +24,7 @@ dir.create(outputdir)
 message(paste("Output file will be", outputdir))
 
 ## Save variables from this script to be loaded again inside the Rmarkdown Report.
-setwd("..")
+if (!(dir.exists("Scripts"))) {setwd("..")}
 save.image(file = "temp.RData")
 
 ## Knit the Report! All this needed to be done outside of knitting the report itself in order to be able to move the report to the output folder when finished.
