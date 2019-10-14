@@ -18,7 +18,7 @@ params:
     input: text
   pregates:
     label: "Perform the following pregates (with format 'channel{<or>}threshold'), seperated by spaces."
-    value: "Ce140Di<250 Ir191Di>200 Ir191Di<450 Y89Di>10"
+    value: ""
     input: text    
   markernames:
     label: "Show marker names instead of metal names."
@@ -156,6 +156,7 @@ message(paste("Arcsinh Data Transformation enabled:",params$arcsinh)); if (param
 
 ## Cluster Data and calculate AOF for each sample
 AOFScores <- list()
+exprs_spread <- list()
 exprs$Sample <- NA
 for (sample in 1:samplenumber) {
   message(paste("\nClustering Sample",sample,"out of", samplenumber))
@@ -167,8 +168,9 @@ for (sample in 1:samplenumber) {
   ## Artificially spread data on x-axis instead of single value per sample
   sampledata <- dplyr::select(sampledata, -starts_with("Sample"))
   sampledata$Sample <- rnorm(n = length(sampledata$FileNum), mean = sample, sd = 0.1)
-  exprs <- dplyr::full_join(exprs, sampledata[c("Time","Sample")], by = c("Time"))
-}
+  exprs_spread[[sample]] <- sampledata
+  }
+exprs2 <- rbind.fill(exprs_spread)
 
 ```
 
@@ -210,10 +212,10 @@ for (marker in lineage_channels) {
   print(paste("Scores for Marker", marker)); print(scores[[marker]])
   
   ## Plot & Save Plot
-  plot(exprs[,c("Sample", marker)], pch=".", col = exprs$FileNum, main=marker)
+  plot(exprs2[,c("Sample", marker)], pch=".", col = exprs$FileNum, main=marker)
   rect(xleft = bestsamples[[marker]]-0.5, ybottom = 0, xright = bestsamples[[marker]]+0.5, ytop = max(exprs[,marker]), border = "red")
   if (params$markernames) {png(paste(marker,".png", sep = ""))} else {png(paste(marker,".png", sep = ""))}
-  plot(exprs[,c("Sample", marker)], pch=".", col = exprs$FileNum, main=marker)
+  plot(exprs2[,c("Sample", marker)], pch=".", col = exprs$FileNum, main=marker)
   rect(xleft = bestsamples[[marker]]-0.5, ybottom = 0, xright = bestsamples[[marker]]+0.5, ytop = max(exprs[,marker]), border = "red")
   dev.off()
   

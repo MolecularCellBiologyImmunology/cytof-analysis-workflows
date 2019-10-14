@@ -68,10 +68,9 @@ if (length(installation_needed) == 0) {message("\nAll packages are already insta
   setwd(.libPaths()[1])
   for (package in installation_needed) {
     try({detach(name = package)})
-    try({dir_delete(list.dirs(recursive = FALSE)[which(grepl(pattern = package, x = list.dirs(recursive = FALSE)))])})
+    try({dir_delete(list.dirs(recursive = FALSE)[which(grepl(pattern = package, x = list.dirs(recursive = FALSE)))]); message(paste("Uninstalled Disfunctional Package", package))})
   }
 }
-
 
 ## Set Pandoc
 require(yaml); require(rmarkdown)
