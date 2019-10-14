@@ -8,19 +8,19 @@ output:
     theme: united
     css: style.css
 params:
-  pregating_channels: 
+  pregating_channels:
     label: "If the following channels exist, assign them to Pregating Channels, seperated by spaces."
     value: "Ce140Di BEADS Ir191Di DNA1 Ir193Di DNA2 Rh103Di livedead LiveDead LIVEDEAD"
     input: text
-  instrument_channels: 
+  instrument_channels:
     label: "If the following channels exist, assign them to Instrument Channels, seperated by spaces."
     value: "Time Event_length Center SampleID Offset Width Residual FileNum"
     input: text
-  pregates: 
+  pregates:
     label: "Perform the following pregates (with format 'channel{<or>}threshold'), seperated by spaces."
     value: "Ce140Di<250 Ir191Di>200 Ir191Di<450 Y89Di>10"
     input: text    
-  markernames: 
+  markernames:
     label: "Show marker names instead of metal names."
     value: FALSE
     input: checkbox     
@@ -46,65 +46,35 @@ Version: 1.0
 
 Adapted from http://biosurf.wiki/#!/wiki/cytof, Nowicka et al. (2019), Amir et al. (2018), and the unpublished work of Jan Verhoeff
 
-### 0. Installation of Environment (Only once per PC, skipped afterwards)
+### 1. Setup of Environment
 
 ```{r installation, echo = TRUE, results='hold', message=FALSE}
 
 ## Check if all necessary packages are installed
-packages_to_check <- c("scales", "RColorBrewer", "MASS", "Rtsne", "kohonen", "miscTools", "gplots", "Radviz", "igraph", "statmod","dplyr","readr","tibble", "flowCore", "cytofkit", "ConsensusClusterPlus", "cydar", "flowCL", "CATALYST", "ncdfFlow", "edgeR", "FlowSOM", "flowDensity", "devtools", "cytofCore", "cytutils", "Rphenograph", "MEM")
+packages_to_check <- c('abind', 'askpass', 'assertthat', 'backports', 'base64enc', 'BH', 'Biobase', 'BiocGenerics', 'BiocInstaller', 'BiocParallel', 'bitops', 'brew', 'callr', 'car', 'carData', 'CATALYST', 'caTools', 'cellranger', 'circlize', 'cli', 'clipr', 'clisymbols', 'colorspace', 'colourpicker', 'commonmark', 'ComplexHeatmap', 'ConsensusClusterPlus', 'corpcor', 'covr', 'crayon', 'crosstalk', 'curl', 'cydar', 'cytofCore', 'cytofkit', 'cytolib', 'cytutils', 'data.table', 'DelayedArray', 'DEoptimR', 'desc', 'destiny', 'devtools', 'digest', 'doParallel', 'dotCall64', 'dplyr', 'drc', 'DT', 'e1071', 'edgeR', 'ellipsis', 'evaluate', 'fansi', 'fields', 'flowCL', 'flowCore', 'flowDensity', 'FlowSOM', 'flowUtils', 'flowViz', 'flowWorkspace', 'forcats', 'foreach', 'formatR', 'fs', 'futile.logger', 'futile.options', 'gdata', 'GenomeInfoDb', 'GenomicRanges', 'GEOmap', 'GetoptLong', 'ggplot2', 'ggrepel', 'ggthemes', 'gh', 'git2r', 'GlobalOptions', 'glue', 'gplots', 'graph', 'gridBase', 'gridExtra', 'gtable', 'gtools', 'haven', 'hexbin', 'highr', 'hms', 'htmltools', 'htmlwidgets', 'httpuv', 'httr', 'IDPmisc', 'igraph', 'ini', 'IRanges', 'iterators', 'jsonlite', 'knitr', 'kohonen', 'labeling', 'laeken', 'lambda.r', 'later', 'latticeExtra', 'lazyeval', 'lifecycle', 'limma', 'lme4', 'lmtest', 'locfit', 'magrittr', 'maps', 'maptools', 'markdown', 'MASS', 'MatrixModels', 'matrixStats', 'MBA', 'MEM', 'memoise', 'mime', 'miniUI', 'minqa', 'miscTools', 'multcomp', 'munsell', 'mvtnorm', 'ncdfFlow', 'nloptr', 'nnls', 'openssl', 'openxlsx', 'pbkrtest', 'pcaPP', 'pdist', 'permute', 'pillar', 'pkgbuild', 'pkgconfig', 'pkgload', 'plogr', 'plotly', 'plotrix', 'plyr', 'praise', 'prettyunits', 'processx', 'progress', 'promises', 'proxy', 'ps', 'purrr', 'quantreg', 'R6', 'Radviz', 'ranger', 'RANN', 'RBGL', 'rcmdcheck', 'RColorBrewer', 'Rcpp', 'RcppArmadillo', 'RcppEigen', 'RCurl', 'readr', 'readxl', 'rematch', 'remotes', 'reshape2', 'rex', 'RFOC', 'rgeos', 'Rgraphviz', 'Rhdf5lib', 'rio', 'rjson', 'rlang', 'rmarkdown', 'robustbase', 'roxygen2', 'Rphenograph', 'RPMG', 'rprojroot', 'RProtoBufLib', 'rrcov', 'RSEIS', 'rstudioapi', 'Rtsne', 'RUnit', 'rversions', 'Rwave', 'S4Vectors', 'sandwich', 'scales', 'scatterplot3d', 'sessioninfo', 'shape', 'shiny', 'shinyBS', 'shinydashboard', 'shinyFiles', 'shinyjs', 'smoother', 'snow', 'sourcetools', 'sp', 'spam', 'SPARQL', 'SparseM', 'splancs', 'statmod', 'stringi', 'stringr', 'SummarizedExperiment', 'sys', 'testthat', 'TH.data', 'tibble', 'tidyr', 'tidyselect', 'tinytex', 'tsne', 'TTR', 'usethis', 'utf8', 'vcd', 'vctrs', 'vegan', 'VGAM', 'VIM', 'viridis', 'viridisLite', 'whisker', 'withr', 'xfun', 'XML', 'xml2', 'xopen', 'xtable', 'xts', 'XVector', 'yaml', 'zeallot', 'zip', 'zlibbioc', 'zoo')
 installation_needed <- (packages_to_check %in% installed.packages())
 installation_needed <- packages_to_check[installation_needed == FALSE]
-if(length(installation_needed) > 0) {print(paste("The following packages are missing:",installation_needed)); stop("Not all necessary packages are installed! Run the Installation Executable.")}
+if(length(installation_needed) > 0) {stop(paste("Not all necessary packages are installed! Run the Installation Executable or contact the author. The following packages are missing:", paste(installation_needed, collapse = ", ")))}
 
-```
-
-### 1. Load Required Packages and Parameters
-
-```{r setup, echo = TRUE, results='hold', warning=TRUE, message=FALSE}
+## Load required packages
+lapply(packages_to_check, require, character.only = TRUE)
 
 ## Set behaviour of functions using randomness to the same version, so results are the same regardless of R version
 RNGversion("3.5.3")
-
-## Load required packages
-require(scales)
-require(RColorBrewer)
-require(MASS)
-require(Rtsne)
-require(kohonen)
-require(miscTools)
-require(gplots)
-require(Radviz)
-require(igraph)
-require(statmod)
-require(readr)
-require(tibble)
-require(Rphenograph)
-require(flowCore)
-require(cytofkit)
-require(ConsensusClusterPlus)
-require(cydar)
-require(flowCL)
-require(CATALYST)
-require(ncdfFlow)
-require(edgeR)
-require(FlowSOM)
-require(cytofCore)
-require(flowDensity)
-require(MEM)
-require(cytutils)
-require(dplyr)
 
 ```
 
 ### 2. Data Import
 
-```{r import}
+```{r import, message = FALSE}
 
 ## Load and print used parameters for future reference
-load(file = "temp.RData")
+load(file = "../temp.RData")
 message("Input Files: ", files)
 message("Output Directory: ", outputdir)
-message("User Defined Parameters: ")
+print(paste("Input Files: ", files))
+print(paste("Output Directory: ", outputdir))
+print("User Defined Parameters: ")
 params
 
 ## Unzip Zipped files
@@ -113,7 +83,8 @@ params
 #fcs_files <- list.files(pattern='.fcs$', full=TRUE, ignore.case = TRUE)
 
 ## Concatenate if needed, load the FCS File and print its summary
-if (!concat) {fcs <- read.FCS(filename = files, transformation = FALSE)} else {fcs <- concatFCS(x = files, file_num = TRUE); write.FCS(fcs, filename = paste(outputdir,".fcs",sep=""))}
+if (!concat) {fcs <- read.FCS(filename = files, transformation = FALSE)} else {fcs <- concatFCS(x = files, file_num = TRUE)
+write.FCS(fcs, filename = paste(outputdir,".fcs",sep=""))}
 exprs <- as.data.frame(fcs@exprs)
 if (is.null(exprs$FileNum)) {stop("This Single File was not concatenated using this Script! Please re-concatenate your file using this script.")}
 fcs@parameters@data
@@ -125,16 +96,17 @@ samplenumber <- length(unique(exprs$FileNum))
 ### 3. Data Preprocessing
 
 ```{r preprocessing}
+
 ## TODO: Spillover Correction using spillover() function and Spillover Matrix 
-spillovermatrix <- spillover(x = fcs)
-compensate(x = fcs, spillover = spillovermatrix)
+#spillovermatrix <- spillover(x = fcs, )
+#compensate(x = fcs, spillover = spillovermatrix)
 
 ## Data Pre-Gating
-pregating <- function(exprs, pregate) {
+pregating <- function(x, pregate) {
   message(paste("Applying Pregate", pregate));
-  if (grepl("<", pregate, fixed=TRUE)) {filterargs <- strsplit(pregate, split = "<")[[1]]; exprs2 <- dplyr::filter(exprs, exprs[,filterargs[1]] < filterargs[2] ) };
-  if (grepl(">", pregate, fixed=TRUE)) {filterargs <- strsplit(pregate, split = ">")[[1]]; exprs2 <- dplyr::filter(exprs, exprs[,filterargs[1]] > filterargs[2] ) };
-  num_removed <- dim(exprs)[1] - dim(exprs2)[1] 
+  if (grepl("<", pregate, fixed=TRUE)) {filterargs <- strsplit(pregate, split = "<")[[1]]; exprs2 <- dplyr::filter(x, filterargs[1] < as.numeric(filterargs[2]) ) };
+  if (grepl(">", pregate, fixed=TRUE)) {filterargs <- strsplit(pregate, split = ">")[[1]]; exprs2 <- dplyr::filter(x, filterargs[1] > as.numeric(filterargs[2]) ) };
+  num_removed <- dim(x)[1] - dim(exprs2)[1] 
   print(paste("Pregate", pregate, "applied succesfully.", num_removed, "cells have been filtered out.")) 
   return(exprs2) }
 
@@ -185,13 +157,18 @@ message(paste("Arcsinh Data Transformation enabled:",params$arcsinh)); if (param
 
 ## Cluster Data and calculate AOF for each sample
 AOFScores <- list()
+exprs$Sample <- NA
 for (sample in 1:samplenumber) {
-  message("\n")
-  message(paste("Clustering Sample",sample,"out of", samplenumber))
+  message(paste("\nClustering Sample",sample,"out of", samplenumber))
   sampledata <- dplyr::filter(exprs, exprs$FileNum == sample)
   Rphenograph_out <- Rphenograph::Rphenograph(sampledata[,lineage_channels], k = 30)
   AOF <- greedyCytometryAof(fcs_data = sampledata[,lineage_channels], y = Rphenograph_out[[2]]$membership)
   AOFScores[[sample]] <- column_to_rownames(.data = AOF, var = "ChannelName")
+   
+  ## Artificially spread data on x-axis instead of single value per sample
+  sampledata <- dplyr::select(sampledata, -starts_with("Sample"))
+  sampledata$Sample <- rnorm(n = length(sampledata$FileNum), mean = sample, sd = 0.1)
+  exprs <- dplyr::full_join(exprs, sampledata[c("Time","Sample")], by = c("Time"))
 }
 
 ```

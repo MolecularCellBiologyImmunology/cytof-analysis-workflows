@@ -5,7 +5,7 @@ require(dplyr)
 require(cytofCore)
 
 # Choose File
-files <- choose.files(caption = "Please select one already concatonated .fsc file or multiple .fcs files to be concatonated.") 
+files <- choose.files()#capticon = "Please select one already concatonated .fsc file or multiple .fcs files to be concatonated.") 
 if (!all(grepl(pattern = '.fcs$', x = files))) {stop("All selected files must have the \".fsc\" extension!")}
 concat <- (length(files)>1)
 if (!concat) {
@@ -14,9 +14,10 @@ if (!concat) {
 }
 if (!concat) {fcs <- read.FCS(filename = files, transformation = FALSE)} else {fcs <- concatFCS(x = files, file_num = TRUE); write.FCS(fcs, filename = paste(outputdir,".fcs",sep=""))}
 exprs <- as.data.frame(fcs@exprs)
+if (is.null(exprs$FileNum)) {stop("This Single File was not concatenated using this Script! Please re-concatenate your file using this script.")}
 fcs@parameters@data
 t(summary(exprs))
-for (col in colnames(exprs)) {print(paste(col, length(unique(exprs[,col]))))}
+samplenumber <- length(unique(exprs$FileNum))for (col in colnames(exprs)) {print(paste(col, length(unique(exprs[,col]))))}
 
 ## Pregating
 exprs <- dplyr::filter(exprs, exprs$Ce140Di < 250)
@@ -48,15 +49,4 @@ print(paste("Arcsinh Data Transformation enabled:",params$arcsinh)); if (params$
 }
 
 ## Examine Data
-plot(exprs$SampleID, exprs$CD3)
-
-## Assign Samples
-samplenumber <- params$sampleidnumber
-SampleIDStart <- params$sampleidstart
-SampleWidth <- params$sampleidwidth
-for (sample in 1:samplenumber) 
-{exprs[ between(exprs$SampleID, SampleIDStart + (sample-1)*SampleWidth, SampleIDStart + sample*SampleWidth) , "Sample"] <- sample}
-#for (marker in lineage_channels) {plot(exprs[,c("SampleID", marker)], pch=".", col = exprs$Sample, main=marker)}
-
-## Examine Data
-plot(exprs$SampleID, exprs$CD3, col = exprs$Sample)
+plot(exprs$SampleID, exprs$CD3, col = exprs$File_Num)

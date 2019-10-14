@@ -1,0 +1,120 @@
+---
+title: "CyTOF Data Clustering"
+author: "Michael de Kok"
+date: "September 17th, 2019"
+output: html_document
+---
+
+# Adapted from http://biosurf.wiki/#!/wiki/cytof, Nowicka et al. (2019), and the work of Jan Verhoeff
+
+### 0. Installation (Only once per PC, skip afterwards)
+
+```{r installation eval = FALSE, echo = FALSE}
+## From CRAN
+install.packages(c("scales", "RColorBrewer", "MASS", "Rtsne", "kohonen", "miscTools", "gplots", "Radviz", "igraph", "statmod","dplyr","readr","tibble"))
+
+## From BioConductor
+source("https://bioconductor.org/biocLite.R")
+biocLite(c("flowCore", "cytofkit", "ConsensusClusterPlus", "cydar", "flowCL", "CATALYST", "ncdfFlow", "edgeR", "FlowSOM"))
+
+## From source
+library(devtools)
+install_github("nolanlab/cytofCore")
+download.file(url = "http://www.nature.com/nmeth/journal/v14/n3/extref/nmeth.4149-S5.zip", destfile = "./MEM.zip")
+unzip("MEM.zip")
+setwd("./MEM")
+build()
+install.packages("./", repos = NULL, type="source")
+unlink("../MEM/", recursive = TRUE) # optional cleanup
+```
+
+### 1. Setup (Same for all Scripts)
+
+```{r setup}
+## Set behaviour of functions using randomness to the same version, so results are the same regardless of R version
+RNGversion("3.5.3")
+
+## Load required packages
+require(scales)
+require(RColorBrewer)
+require(MASS)
+require(Rtsne)
+require(kohonen)
+require(miscTools)
+require(gplots)
+require(Radviz)
+require(igraph)
+require(statmod)
+require(readr)
+require(tibble)
+require(knitr)
+require(flowCore)
+require(cytofkit)
+require(ConsensusClusterPlus)
+require(cydar)
+require(flowCL)
+require(CATALYST)
+require(ncdfFlow)
+require(edgeR)
+require(FlowSOM)
+require(cytofCore)
+require(MEM)
+require(dplyr)
+
+## Set working directory 
+print("Please select the directory containing the zipped or unzipped data.")
+rootdir <- choose.dir()
+```
+
+### 2. Data Import
+
+```{r import}
+opts_knit$set(root.dir = rootdir)
+setwd(rootdir)
+zip_files <- list.files(pattern='.zip$', full=TRUE, ignore.case = TRUE)
+if (!isEmpty(zip_files)) {unzip(zipfile = zip_files)}
+fcs_files <- list.files(pattern='.fcs$', full=TRUE, ignore.case = TRUE)
+fcs <- read.FCS(filename=fcs_files[1], transformation=FALSE)
+exprs <- fcs@exprs
+fcs@parameters@data
+
+## Make colnames human readable using information in the parameter data slot
+markers <- gsub(pattern = ".*_", replacement = "", x = as.vector(fcs@parameters@data$desc))
+colnames(exprs)[which(!is.na(markers))] <- markers[which(!is.na(markers))]
+
+## Merging fcs files (in case of interrupted runs)
+#dir.create("./combined"); cytofCore.concatenateDirectoryFiles(inputDir=".",outputDir="./combined",pattern=NULL,overwrite=F,timeParam="time")
+
+# Data Description
+pregating_channels <- c("BEADS", "DNA1", "DNA2", "livedead", "Event_length")
+instrument_channels <- c("Time", "Event_length", "Center", "SampleID") # "Offset", "Width", "Residual",
+lineage_channels <- unlist(colnames(exprs));
+lineage_channels <- lineage_channels[!lineage_channels %in% c(pregating_channels,instrument_channels)]
+```
+
+### 4. Data Preprocessing
+
+```{r preprocessing}
+
+# Bead Normalization: Already performed by software before data import
+# Compensation: Already performed by software before data import
+# Debarcoding: Already performed by software before data import
+
+# Data Transformation: Arcsinh
+require(MASS)
+require(RColorBrewer)
+k <- 11; my.cols <- rev(brewer.pal(k, "RdYlBu"))
+cofac <- 5
+exprs_trans <- cbind(asinh(exprs[,c(pregating_channels, lineage_channels)]/cofac), exprs[,instrument_channels])
+plot(exprs[,c("CD8", "CD4")], pch=".", col="grey", main="CD8 vs CD4")
+z <- kde2d(exprs[,"CD8"], h = length(exprs[,"CD8"]), exprs[,"CD4"], n=50)
+contour(z, drawlabels=FALSE, nlevels=k, col=my.cols, add=TRUE)
+plot(exprs_trans[,c("CD8", "CD4")], pch=".", col="grey", main="CD8 vs CD4 (transformed counts)")
+z <- kde2d(exprs_trans[,"CD8"], h = length(exprs_trans[,"CD8"]), exprs_trans[,"CD4"], n=50)
+contour(z, drawlabels=FALSE, nlevels=k, col=my.cols, add=TRUE)
+
+# Data Pre-Gating
+
+```
+
+### 5. Data Analysis
