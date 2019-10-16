@@ -10,6 +10,12 @@ installation_needed <- packages_to_check[installation_needed == FALSE]
 if (length(installation_needed) == 0) {message("\nAll packages are already installed! No installation needed.\n")} else {
   message(paste("The following packages are missing:", paste(installation_needed, collapse = ", ")))
   
+  
+  ## Determine User Package Library
+  LibPath <- Sys.getenv("R_LIBS_USER")
+  message(paste("Installing Packages into Personal Library:",LibPath))
+  
+  
   ## Install Packages from local zip file or compile from the cloud
   get_os <- function(){
     sysinf <- Sys.info()
@@ -26,16 +32,15 @@ if (length(installation_needed) == 0) {message("\nAll packages are already insta
     }
     tolower(os)
   }
-
   if (get_os()[[1]] == "windows") {packagefolder <- "./Packages_ZIP"} else {packagefolder <- "./Packages_TAR_GZ"; setwd(system("pwd", intern = T))}
   if (!(dir.exists(packagefolder))) {setwd("..")}
   if (dir.exists(packagefolder)) {
     
     ## From Zips
-    message(paste("Installing Packages into Personal Library:",.libPaths()[1]))
+    
     message("\nDirectory with Package zip files found, installing from local zips.\n")
     setwd(packagefolder)
-    for (file in list.files()) {if (any(grepl(pattern = strsplit(file,split="[_.]+")[[1]][1], x = installation_needed))) {install.packages(file, repos = NULL, type = "source", lib =.libPaths()[1])}}
+    for (file in list.files()) {if (any(grepl(pattern = strsplit(file,split="[_.]+")[[1]][1], x = installation_needed))) {install.packages(file, repos = NULL, type = "source", lib =LibPath)}}
     setwd("..")
     
     ## From Internet  
@@ -65,7 +70,7 @@ if (length(installation_needed) == 0) {message("\nAll packages are already insta
     } else {stop("\nAll necessary packages installed!!! You're ready to launch the other executables.\n")}
 
   ## Detach, Delete nonfunctional specific packages
-  setwd(.libPaths()[1])
+  setwd(LibPath)
   for (package in installation_needed) {
     try({detach(name = package)})
     try({dir_delete(list.dirs(recursive = FALSE)[which(grepl(pattern = package, x = list.dirs(recursive = FALSE)))]); message(paste("Uninstalled Disfunctional Package", package))})

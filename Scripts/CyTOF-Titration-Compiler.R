@@ -8,7 +8,6 @@ if(length(installation_needed) > 0) {stop(paste("Not all necessary packages are 
 require(rmarkdown); require(knitr); require(shiny); require(yaml)
 
 ## Set Pandoc
-require(rmarkdown); require(knitr); require(shiny); require(yaml)
 if (pandoc_available(version = NULL, error = FALSE)) {write_yaml(file = "../PATHS.YML", x= data.frame("PANDOC_INSTALLATION_PATH" = Sys.getenv("RSTUDIO_PANDOC")))
 } else {paths <- read_yaml("../PATHS.YML");  Sys.setenv(RSTUDIO_PANDOC = paths$PANDOC_INSTALLATION_PATH)}
 
