@@ -1,120 +1,57 @@
 ---
-title: "CyTOF Data Clustering"
+title: "CyTOF Sample Clustering Report"
 author: "Michael de Kok"
-date: "September 17th, 2019"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: html_document
 ---
 
-# Adapted from http://biosurf.wiki/#!/wiki/cytof, Nowicka et al. (2019), and the work of Jan Verhoeff
+Version: 1.1
 
-### 0. Installation (Only once per PC, skip afterwards)
+Adapted from http://biosurf.wiki/#!/wiki/cytof, Nowicka et al. (2019), Amir et al. (2018), and the unpublished work of Jan Verhoeff
 
-```{r installation eval = FALSE, echo = FALSE}
-## From CRAN
-install.packages(c("scales", "RColorBrewer", "MASS", "Rtsne", "kohonen", "miscTools", "gplots", "Radviz", "igraph", "statmod","dplyr","readr","tibble"))
+### 1. Setup of Environment
 
-## From BioConductor
-source("https://bioconductor.org/biocLite.R")
-biocLite(c("flowCore", "cytofkit", "ConsensusClusterPlus", "cydar", "flowCL", "CATALYST", "ncdfFlow", "edgeR", "FlowSOM"))
+```{r installation, echo = TRUE, results='hide', message=FALSE}
 
-## From source
-library(devtools)
-install_github("nolanlab/cytofCore")
-download.file(url = "http://www.nature.com/nmeth/journal/v14/n3/extref/nmeth.4149-S5.zip", destfile = "./MEM.zip")
-unzip("MEM.zip")
-setwd("./MEM")
-build()
-install.packages("./", repos = NULL, type="source")
-unlink("../MEM/", recursive = TRUE) # optional cleanup
-```
+## Check if all necessary packages are installed by trying to load each
+packages_to_check <- c('abind', 'askpass', 'assertthat', 'backports', 'base64enc', 'BH', 'Biobase', 'BiocGenerics', 'BiocInstaller', 'BiocParallel', 'bitops', 'brew', 'callr', 'car', 'carData', 'CATALYST', 'caTools', 'cellranger', 'circlize', 'cli', 'clipr', 'clisymbols', 'colorspace', 'colourpicker', 'commonmark', 'ComplexHeatmap', 'ConsensusClusterPlus', 'corpcor', 'covr', 'crayon', 'crosstalk', 'curl', 'cydar', 'cytofCore', 'cytofkit', 'cytolib', 'cytutils', 'data.table', 'DelayedArray', 'DEoptimR', 'desc', 'destiny', 'devtools', 'digest', 'doParallel', 'dotCall64', 'dplyr', 'drc', 'DT', 'e1071', 'edgeR', 'ellipsis', 'evaluate', 'fansi', 'fields', 'flowCL', 'flowCore', 'flowDensity', 'FlowSOM', 'flowUtils', 'flowViz', 'flowWorkspace', 'forcats', 'foreach', 'formatR', 'fs', 'futile.logger', 'futile.options', 'gdata', 'GenomeInfoDb', 'GenomicRanges', 'GEOmap', 'GetoptLong', 'ggplot2', 'ggrepel', 'ggthemes', 'gh', 'git2r', 'GlobalOptions', 'glue', 'gplots', 'graph', 'gridBase', 'gridExtra', 'gtable', 'gtools', 'haven', 'hexbin', 'highr', 'hms', 'htmltools', 'htmlwidgets', 'httpuv', 'httr', 'IDPmisc', 'igraph', 'ini', 'IRanges', 'iterators', 'jsonlite', 'knitr', 'kohonen', 'labeling', 'laeken', 'lambda.r', 'later', 'latticeExtra', 'lazyeval', 'lifecycle', 'limma', 'lme4', 'lmtest', 'locfit', 'magrittr', 'maps', 'maptools', 'markdown', 'MASS', 'MatrixModels', 'matrixStats', 'MBA', 'MEM', 'memoise', 'mime', 'miniUI', 'minqa', 'miscTools', 'multcomp', 'munsell', 'mvtnorm', 'ncdfFlow', 'nloptr', 'nnls', 'openssl', 'openxlsx', 'pbkrtest', 'pcaPP', 'pdist', 'permute', 'pillar', 'pkgbuild', 'pkgconfig', 'pkgload', 'plogr', 'plotly', 'plotrix', 'plyr', 'praise', 'prettyunits', 'processx', 'progress', 'promises', 'proxy', 'ps', 'purrr', 'quantreg', 'R6', 'Radviz', 'ranger', 'RANN', 'RBGL', 'rcmdcheck', 'RColorBrewer', 'Rcpp', 'RcppArmadillo', 'RcppEigen', 'RCurl', 'readr', 'readxl', 'rematch', 'remotes', 'reshape2', 'rex', 'RFOC', 'rgeos', 'Rgraphviz', 'Rhdf5lib', 'rio', 'rjson', 'rlang', 'rmarkdown', 'robustbase', 'roxygen2', 'Rphenograph', 'RPMG', 'rprojroot', 'RProtoBufLib', 'rrcov', 'RSEIS', 'rstudioapi', 'Rtsne', 'RUnit', 'rversions', 'Rwave', 'S4Vectors', 'sandwich', 'scales', 'scatterplot3d', 'sessioninfo', 'shape', 'shiny', 'shinyBS', 'shinydashboard', 'shinyFiles', 'shinyjs', 'smoother', 'snow', 'sourcetools', 'sp', 'spam', 'SPARQL', 'SparseM', 'splancs', 'statmod', 'stringi', 'stringr', 'SummarizedExperiment', 'sys', 'testthat', 'TH.data', 'tibble', 'tidyr', 'tidyselect', 'tinytex', 'tsne', 'TTR', 'usethis', 'utf8', 'vcd', 'vctrs', 'vegan', 'VGAM', 'VIM', 'viridis', 'viridisLite', 'whisker', 'withr', 'xfun', 'XML', 'xml2', 'xopen', 'xtable', 'xts', 'XVector', 'yaml', 'zeallot', 'zip', 'zlibbioc', 'zoo')
+installation_needed <- unlist(lapply(packages_to_check, require, character.only = TRUE, quietly = TRUE))
 
-### 1. Setup (Same for all Scripts)
+## Stop if not all required packages are installed
+installation_needed <- packages_to_check[installation_needed == FALSE]
+if(length(installation_needed) > 0) {stop(paste("\n\nNot all necessary packages are installed! Run the Installation Executable or contact the author. The following packages are missing:", paste(installation_needed, collapse = ", ")))}
 
-```{r setup}
 ## Set behaviour of functions using randomness to the same version, so results are the same regardless of R version
 RNGversion("3.5.3")
 
-## Load required packages
-require(scales)
-require(RColorBrewer)
-require(MASS)
-require(Rtsne)
-require(kohonen)
-require(miscTools)
-require(gplots)
-require(Radviz)
-require(igraph)
-require(statmod)
-require(readr)
-require(tibble)
-require(knitr)
-require(flowCore)
-require(cytofkit)
-require(ConsensusClusterPlus)
-require(cydar)
-require(flowCL)
-require(CATALYST)
-require(ncdfFlow)
-require(edgeR)
-require(FlowSOM)
-require(cytofCore)
-require(MEM)
-require(dplyr)
-
-## Set working directory 
-print("Please select the directory containing the zipped or unzipped data.")
-rootdir <- choose.dir()
 ```
 
 ### 2. Data Import
 
-```{r import}
-opts_knit$set(root.dir = rootdir)
-setwd(rootdir)
-zip_files <- list.files(pattern='.zip$', full=TRUE, ignore.case = TRUE)
-if (!isEmpty(zip_files)) {unzip(zipfile = zip_files)}
-fcs_files <- list.files(pattern='.fcs$', full=TRUE, ignore.case = TRUE)
-fcs <- read.FCS(filename=fcs_files[1], transformation=FALSE)
-exprs <- fcs@exprs
+```{r import, message = FALSE}
+
+## Load and print used parameters for future reference
+load(file = "../temp.RData")
+message("Input Files: ", files)
+message("Output Directory: ", outputdir)
+print(paste("Input Files: ", files))
+print(paste("Output Directory: ", outputdir))
+print("User Defined Parameters: ")
+params
+
+## Unzip Zipped files
+#zip_files <- list.files(pattern='.zip$', full=TRUE, ignore.case = TRUE)
+#if (!isEmpty(zip_files)) {unzip(zipfile = zip_files)}
+#fcs_files <- list.files(pattern='.fcs$', full=TRUE, ignore.case = TRUE)
+
+## Concatenate if needed, load the FCS File and print its summary
+if (!concat) {fcs <- read.FCS(filename = files, transformation = FALSE)} else {fcs <- concatFCS(x = files, file_num = TRUE)
+write.FCS(fcs, filename = paste(outputdir,".fcs",sep=""))}
+exprs <- as.data.frame(fcs@exprs)
+if (is.null(exprs$FileNum)) {stop("This Single File was not concatenated using this Script! Please re-concatenate your file using this script.")}
 fcs@parameters@data
-
-## Make colnames human readable using information in the parameter data slot
-markers <- gsub(pattern = ".*_", replacement = "", x = as.vector(fcs@parameters@data$desc))
-colnames(exprs)[which(!is.na(markers))] <- markers[which(!is.na(markers))]
-
-## Merging fcs files (in case of interrupted runs)
-#dir.create("./combined"); cytofCore.concatenateDirectoryFiles(inputDir=".",outputDir="./combined",pattern=NULL,overwrite=F,timeParam="time")
-
-# Data Description
-pregating_channels <- c("BEADS", "DNA1", "DNA2", "livedead", "Event_length")
-instrument_channels <- c("Time", "Event_length", "Center", "SampleID") # "Offset", "Width", "Residual",
-lineage_channels <- unlist(colnames(exprs));
-lineage_channels <- lineage_channels[!lineage_channels %in% c(pregating_channels,instrument_channels)]
-```
-
-### 4. Data Preprocessing
-
-```{r preprocessing}
-
-# Bead Normalization: Already performed by software before data import
-# Compensation: Already performed by software before data import
-# Debarcoding: Already performed by software before data import
-
-# Data Transformation: Arcsinh
-require(MASS)
-require(RColorBrewer)
-k <- 11; my.cols <- rev(brewer.pal(k, "RdYlBu"))
-cofac <- 5
-exprs_trans <- cbind(asinh(exprs[,c(pregating_channels, lineage_channels)]/cofac), exprs[,instrument_channels])
-plot(exprs[,c("CD8", "CD4")], pch=".", col="grey", main="CD8 vs CD4")
-z <- kde2d(exprs[,"CD8"], h = length(exprs[,"CD8"]), exprs[,"CD4"], n=50)
-contour(z, drawlabels=FALSE, nlevels=k, col=my.cols, add=TRUE)
-plot(exprs_trans[,c("CD8", "CD4")], pch=".", col="grey", main="CD8 vs CD4 (transformed counts)")
-z <- kde2d(exprs_trans[,"CD8"], h = length(exprs_trans[,"CD8"]), exprs_trans[,"CD4"], n=50)
-contour(z, drawlabels=FALSE, nlevels=k, col=my.cols, add=TRUE)
-
-# Data Pre-Gating
+t(summary(exprs))
+samplenumber <- length(unique(exprs$FileNum))
 
 ```
 
-### 5. Data Analysis
