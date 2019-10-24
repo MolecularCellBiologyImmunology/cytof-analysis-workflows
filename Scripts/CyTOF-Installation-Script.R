@@ -45,10 +45,10 @@ if (length(installation_needed) == 0) {message("\n- All packages are already ins
   if (!(dir.exists(packagefolder))) {setwd("..")}
   cloud_needed <- 1
   
-  if (!(dir.exists(packagefolder))) {message("\nNo directory with Package zip files found. Attempting to install from cloud instead.\n")} else {
+  if (!(dir.exists(packagefolder))) {message("\n- No directory with Package zip files found. Attempting to install from cloud instead.\n")} else {
     
     ## From Zips
-    message("\nDirectory with Package zip files found, installing from local zips.\n")
+    message("\n- Directory with Package zip files found, installing from local zips.\n")
     setwd(packagefolder)
     for (file in list.files()) {if (any(grepl(pattern = strsplit(file,split="[_.]+")[[1]][1], x = installation_needed))) {install.packages(file, repos = NULL, type = "source", lib = LibPath); cloud_needed <- 0}}
     
@@ -75,13 +75,12 @@ if (length(installation_needed) == 0) {message("\n- All packages are already ins
     if ("cytutils" %in% installation_needed) {try({install_github("ismmshimc/cytutils", force = TRUE)})}
     if ("Rphenograph" %in% installation_needed) {try({install_github("JinmiaoChenLab/Rphenograph", force = TRUE)})}
     if ("MEM" %in% installation_needed) {try({download.file(url = "http://www.nature.com/nmeth/journal/v14/n3/extref/nmeth.4149-S5.zip", destfile = "./MEM.zip"); unzip("MEM.zip"); setwd("./MEM"); build(); install.packages("./", repos = NULL, type="source"); setwd(".."); unlink("../MEM", recursive = TRUE) })}
-    
   }
   
   ## Check if all necessary packages are installed
   installation_still_needed <- unlist(lapply(installation_needed, require, character.only = TRUE, quietly = TRUE))
   installation_needed <- installation_needed[installation_still_needed == FALSE]
-  if(length(installation_needed) > 0) {message(paste("\n- Packages may have been installed, but it seems not all of them are installed yet. \n\n- Run this Installation Executable to try and check again, or contact the Author if this keeps happening. \n\n- The following packages are not loaded:\n", paste(installation_needed, collapse = ", "), "\n"))
+  if(length(installation_needed) > 0) {message(paste("\n- Packages may have been installed this run, but it needs to be checked again if they can be loaded. \n\n- Run this Installation Executable to try and check again, or contact the Author if this keeps happening. \n\n- The following packages are not loaded yet:\n", paste(installation_needed, collapse = ", "), "\n"))
   } else {message("\nAll necessary packages installed!!! You're ready to launch the other executables.\n")}
 }
 
