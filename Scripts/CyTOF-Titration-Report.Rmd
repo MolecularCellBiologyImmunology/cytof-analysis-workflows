@@ -9,16 +9,17 @@ output:
     toc_float: TRUE
     theme: united
     css: style.css
+    version: 1.3
 params:
-  pregating_channels:
+  PREGATING_CHANNELS:
     label: "If the following markers exist, assign them to Pregating Channels and do not plot/score them. Seperated by spaces."
     value: "Ce140Di Ir191Di Ir193Di Rh103Di"
     input: text
-  instrument_channels:
+  INSTRUMENT_CHANNELS:
     label: "If the following channels exist, assign them to Instrument Channels and do not plot/score them. Sperated by spaces."
     value: "Time Event_length Center SampleID Offset Width Residual FileNum"
     input: text
-  pregates:
+  PREAGES:
     label: "Perform the following pregates (with format 'channel{<or>}threshold'). Seperated by spaces."
     value: ""
     input: text
@@ -29,31 +30,29 @@ params:
     input: select
   SPILLOVERMATRIX:
     label: "If previous is not 'Do Nothing', use the following Spillover Matrix file."
-    value: "M:/Shared/CyTOF/Protocols/Titration/Spillover_Fluidigm_Mike.xlsx"
+    value: "../Supplemental Data/Spillover_Fluidigm.xlsx"
     input: file
-  markernames:
+  MARKERNAMES:
     label: "Save files with marker names instead of metal names."
     value: FALSE
     input: checkbox     
-  arcsinh: 
+  ARCSINH: 
     label: "Perform ArcSinh transformation on data."
     value: TRUE
     input: checkbox
-  arcsinhcofac: 
+  ARCSINHCOFAC: 
     label: "Cofactor to use during ArcSinh transformation."
     value: 5
     input: numeric            
-  scores:
+  SCORES:
     label: "Names of score types, seperated by commas.*"
-    value: "Intensity,AOF Score,Concentration Score,Spillover Score,Overall / Weighted Score"
+    value: "Intensity Score,AOF Score,Concentration Score,Spillover Score (Causing),Spillover Score (Receiving),Overall / Weighted Score"
     input: text
-  k: 
+  K: 
     label: "Size of local neighborhood used for Area Overlap Frequency (AOF) calculation."
     value: 30
     input: numeric    
 ---
-
-Version: 1.2
 
 Adapted from http://biosurf.wiki/#!/wiki/cytof, Nowicka et al. (2019), Amir et al. (2018), and the unpublished work of Jan Verhoeff
 
@@ -62,7 +61,7 @@ Adapted from http://biosurf.wiki/#!/wiki/cytof, Nowicka et al. (2019), Amir et a
 ```{r packages, echo = TRUE, results='hide', message=FALSE}
 
 ## Check if all necessary packages are installed by trying to load each
-PACKAGES_TOTAL <- c('abind', 'askpass', 'assertthat', 'backports', 'base64enc', 'beachmat', 'beeswarm', 'BH', 'Biobase', 'BiocGenerics', 'BiocInstaller', 'BiocNeighbors', 'BiocParallel', 'BiocSingular', 'bitops', 'brew', 'callr', 'car', 'carData', 'CATALYST', 'caTools', 'cellranger', 'circlize', 'cli', 'clipr', 'clisymbols', 'clue', 'colorspace', 'colourpicker', 'commonmark', 'ComplexHeatmap', 'ConsensusClusterPlus', 'corpcor', 'covr', 'crayon', 'crosstalk', 'curl', 'cydar', 'cytofCore', 'cytofkit', 'cytolib', 'cytutils', 'data.table', 'DelayedArray', 'DelayedMatrixStats', 'DEoptimR', 'desc', 'destiny', 'devtools', 'digest', 'doParallel', 'dotCall64', 'dplyr', 'drc', 'DT', 'e1071', 'edgeR', 'ellipsis', 'evaluate', 'fansi', 'fastmap', 'fields', 'flowCL', 'flowCore', 'flowDensity', 'FlowSOM', 'flowUtils', 'flowViz', 'flowWorkspace', 'forcats', 'foreach', 'formatR', 'fs', 'futile.logger', 'futile.options', 'gdata', 'GenomeInfoDb', 'GenomeInfoDbData', 'GenomicRanges', 'GEOmap', 'GetoptLong', 'ggbeeswarm', 'ggplot2', 'ggrepel', 'ggridges', 'ggthemes', 'gh', 'git2r', 'GlobalOptions', 'glue', 'gplots', 'graph', 'gridBase', 'gridExtra', 'gtable', 'gtools', 'haven', 'HDF5Array', 'hexbin', 'highr', 'hms', 'htmltools', 'htmlwidgets', 'httpuv', 'httr', 'IDPmisc', 'igraph', 'ini', 'IRanges', 'irlba', 'iterators', 'jsonlite', 'knitr', 'kohonen', 'labeling', 'laeken', 'lambda.r', 'later', 'latticeExtra', 'lazyeval', 'lifecycle', 'limma', 'lme4', 'lmtest', 'locfit', 'magrittr', 'maps', 'maptools', 'markdown', 'MASS', 'MatrixModels', 'matrixStats', 'MBA', 'MEM', 'memoise', 'mime', 'miniUI', 'minqa', 'miscTools', 'multcomp', 'munsell', 'mvtnorm', 'ncdfFlow', 'nloptr', 'nnls', 'openssl', 'openxlsx', 'pbkrtest', 'pcaPP', 'pdist', 'permute', 'pillar', 'pkgbuild', 'pkgconfig', 'pkgload', 'plogr', 'plotly', 'plotrix', 'plyr', 'png', 'praise', 'prettyunits', 'processx', 'progress', 'promises', 'proxy', 'ps', 'purrr', 'quantreg', 'R6', 'Radviz', 'ranger', 'RANN', 'RBGL', 'rcmdcheck', 'RColorBrewer', 'Rcpp', 'RcppAnnoy', 'RcppArmadillo', 'RcppEigen', 'RcppHNSW', 'RcppParallel', 'RCurl', 'readr', 'readxl', 'rematch', 'remotes', 'reshape2', 'rex', 'RFOC', 'rgeos', 'Rgraphviz', 'rhdf5', 'Rhdf5lib', 'rio', 'rjson', 'rlang', 'rmarkdown', 'robustbase', 'roxygen2', 'Rphenograph', 'RPMG', 'rprojroot', 'RProtoBufLib', 'rrcov', 'RSEIS', 'rstudioapi', 'rsvd', 'Rtsne', 'RUnit', 'rversions', 'Rwave', 'S4Vectors', 'sandwich', 'scales', 'scater', 'scatterplot3d', 'sessioninfo', 'shape', 'shiny', 'shinyBS', 'shinydashboard', 'shinyFiles', 'shinyjs', 'SingleCellExperiment', 'smoother', 'snow', 'sourcetools', 'sp', 'spam', 'SPARQL', 'SparseM', 'splancs', 'statmod', 'stringi', 'stringr', 'SummarizedExperiment', 'sys', 'testthat', 'TH.data', 'tibble', 'tidyr', 'tidyselect', 'tinytex', 'tsne', 'TTR', 'usethis', 'utf8', 'vcd', 'vctrs', 'vegan', 'VGAM', 'VIM', 'vipor', 'viridis', 'viridisLite', 'whisker', 'withr', 'xfun', 'XML', 'xml2', 'xopen', 'xtable', 'xts', 'XVector', 'yaml', 'zeallot', 'zip', 'zlibbioc', 'zoo')
+PACKAGES_TOTAL <- c('abind', 'askpass', 'assertthat', 'backports', 'base64enc', 'beachmat', 'beeswarm', 'BH', 'Biobase', 'BiocGenerics', 'BiocInstaller', 'BiocNeighbors', 'BiocParallel', 'BiocSingular', 'bitops', 'brew', 'callr', 'car', 'carData', 'CATALYST', 'caTools', 'cellranger', 'circlize', 'cli', 'clipr', 'clisymbols', 'clue', 'colorspace', 'colourpicker', 'colorRamps', 'commonmark', 'ComplexHeatmap', 'ConsensusClusterPlus', 'corpcor', 'covr', 'crayon', 'crosstalk', 'curl', 'cydar', 'cytofCore', 'cytofkit', 'cytolib', 'cytutils', 'data.table', 'DelayedArray', 'DelayedMatrixStats', 'DEoptimR', 'desc', 'destiny', 'devtools', 'digest', 'doParallel', 'dotCall64', 'dplyr', 'drc', 'DT', 'e1071', 'edgeR', 'ellipsis', 'evaluate', 'fansi', 'fastmap', 'fields', 'flowCL', 'flowCore', 'flowDensity', 'FlowSOM', 'flowUtils', 'flowViz', 'flowWorkspace', 'forcats', 'foreach', 'formatR', 'fs', 'futile.logger', 'futile.options', 'gdata', 'GenomeInfoDb', 'GenomeInfoDbData', 'GenomicRanges', 'GEOmap', 'GetoptLong', 'ggbeeswarm', 'ggplot2', 'ggrepel', 'ggridges', 'ggthemes', 'gh', 'git2r', 'GlobalOptions', 'glue', 'gplots', 'graph', 'gridBase', 'gridExtra', 'gtable', 'gtools', 'haven', 'HDF5Array', 'hexbin', 'highr', 'hms', 'htmltools', 'htmlwidgets', 'httpuv', 'httr', 'IDPmisc', 'igraph', 'ini', 'installr', 'IRanges', 'irlba', 'iterators', 'jsonlite', 'knitr', 'kableExtra', 'kohonen', 'labeling', 'laeken', 'lambda.r', 'later', 'latticeExtra', 'lazyeval', 'lifecycle', 'limma', 'lme4', 'lmtest', 'locfit', 'magrittr', 'maps', 'maptools', 'markdown', 'MASS', 'MatrixModels', 'matrixStats', 'MBA', 'MEM', 'memoise', 'mime', 'miniUI', 'minqa', 'miscTools', 'multcomp', 'munsell', 'mvtnorm', 'ncdfFlow', 'nloptr', 'nnls', 'openssl', 'openxlsx', 'pbkrtest', 'pcaPP', 'pdist', 'permute', 'pheatmap', 'pillar', 'pkgbuild', 'pkgconfig', 'pkgload', 'plogr', 'plotly', 'plotrix', 'plyr', 'png', 'praise', 'prettyunits', 'processx', 'progress', 'promises', 'proxy', 'ps', 'purrr', 'quantreg', 'R6', 'Radviz', 'ranger', 'RANN', 'RBGL', 'rcmdcheck', 'RColorBrewer', 'Rcpp', 'RcppAnnoy', 'RcppArmadillo', 'RcppEigen', 'RcppHNSW', 'RcppParallel', 'RCurl', 'readr', 'readxl', 'rematch', 'remotes', 'reshape2', 'rex', 'RFOC', 'rgeos', 'Rgraphviz', 'rhdf5', 'Rhdf5lib', 'rio', 'rjson', 'rlang', 'rmarkdown', 'robustbase', 'roxygen2', 'Rphenograph', 'RPMG', 'rprojroot', 'RProtoBufLib', 'rrcov', 'RSEIS', 'rstudioapi', 'rsvd', 'Rtsne', 'RUnit', 'rversions', 'Rwave', 'S4Vectors', 'sandwich', 'scales', 'scater', 'scatterplot3d', 'sessioninfo', 'shape', 'shiny', 'shinyBS', 'shinydashboard', 'shinyFiles', 'shinyjs', 'SingleCellExperiment', 'smoother', 'snow', 'sourcetools', 'sp', 'spam', 'SPARQL', 'SparseM', 'splancs', 'statmod', 'stringi', 'stringr', 'SummarizedExperiment', 'sys', 'testthat', 'TH.data', 'tibble', 'tidyr', 'tidyselect', 'tinytex', 'tsne', 'TTR', 'usethis', 'utf8', 'vcd', 'vctrs', 'vegan', 'VGAM', 'VIM', 'vipor', 'viridis', 'viridisLite', 'whisker', 'withr', 'xfun', 'XML', 'xml2', 'xopen', 'xtable', 'xts', 'XVector', 'yaml', 'zeallot', 'zip', 'zlibbioc', 'zoo')
 
 installation_needed <- unlist(lapply(PACKAGES_TOTAL, require, character.only = TRUE, quietly = TRUE))
 installation_needed <- PACKAGES_TOTAL[installation_needed == FALSE]
@@ -119,7 +118,7 @@ if (params$SPILLOVER != "Do Nothing") {
   spillovermarkers <- rownames(compensationmatrix)  
   if (params$SPILLOVER == "Give Warnings & Compensate Data") {
     fcs_compensated <- compensate(x = fcs, spillover = compensationmatrix)
-    exprs_compensated <- as.data.frame(fcs@exprs)
+    exprs_compensated <- as.data.frame(fcs_compensated@exprs)
     t(summary(exprs_compensated))
   }
 }
@@ -133,20 +132,20 @@ pregating <- function(x, pregate) {
   print(paste("Pregate", pregate, "applied succesfully.", num_removed, "cells have been filtered out.")) 
   return(exprs2) }
 
-pregates <- strsplit(params$pregates, split = " ")[[1]] 
+pregates <- strsplit(params$PREGATES, split = " ")[[1]] 
 for (pregate in pregates) {exprs <- pregating(exprs, pregate)}
 
 ## Channel Description
-pregating_channels <- strsplit(params$pregating_channels, split = " ")[[1]]
+pregating_channels <- strsplit(params$PREGATING_CHANNELS, split = " ")[[1]]
 pregating_channels <- pregating_channels[pregating_channels %in% colnames(exprs)]
-instrument_channels <- strsplit(params$instrument_channels, split = " ")[[1]]
+instrument_channels <- strsplit(params$INSTRUMENT_CHANNELS, split = " ")[[1]]
 instrument_channels <- instrument_channels[instrument_channels %in% colnames(exprs)]
 lineage_channels <- unlist(colnames(exprs))[!unlist(colnames(exprs)) %in% c(pregating_channels,instrument_channels)]
 
 ## Make colnames human readable using information in the parameter data slot
 metalmarkers <- list()
 markers <- gsub(pattern = ".*_", replacement = "", x = as.vector(fcs@parameters@data$desc));
-if (params$markernames) {
+if (params$MARKERNAMES) {
   for (markerid in which(!is.na(markers))) {metalmarkers[[markers[markerid]]] <- colnames(exprs)[markerid]}
   colnames(exprs)[which(!is.na(markers))] <- markers[which(!is.na(markers))]
 } else {for (markerid in which(!is.na(markers))) {metalmarkers[[colnames(exprs)[markerid]]] <- markers[markerid]}}
@@ -156,11 +155,11 @@ if (params$markernames) {
 ## Debarcoding:        Already performed by software before data import
 
 ## Arcsinh Data Transformation
-message(paste("Arcsinh Data Transformation enabled:",params$arcsinh)); if (params$arcsinh) {
+message(paste("Arcsinh Data Transformation enabled:",params$ARCSINH)); if (params$ARCSINH) {
   require(MASS)
   require(RColorBrewer)
   k <- 11; my.cols <- rev(brewer.pal(k, "RdYlBu"))
-  cofac <- params$arcsinhcofac
+  cofac <- params$ARCSINHCOFAC
   #plot(exprs[,c("CD8", "CD4")], pch=".", col="grey", main="CD8 vs CD4")
   #z <- kde2d(exprs[,"CD8"], h = length(exprs[,"CD8"]), exprs[,"CD4"], n=50)
   #contour(z, drawlabels=FALSE, nlevels=k, col=my.cols, add=TRUE)
@@ -187,7 +186,7 @@ exprs$Sample <- NA
 for (sample in 1:samplenumber) {
   message(paste("\nClustering Sample",sample,"out of", samplenumber))
   sampledata <- dplyr::filter(exprs, exprs$FileNum == sample)
-  Rphenograph_out <- Rphenograph::Rphenograph(sampledata[,lineage_channels], k = 30)
+  Rphenograph_out <- Rphenograph::Rphenograph(sampledata[,lineage_channels], K = params$K)
   AOF <- greedyCytometryAof(fcs_data = sampledata[,lineage_channels], y = Rphenograph_out[[2]]$membership)
   AOFScores[[sample]] <- column_to_rownames(.data = AOF, var = "ChannelName")
    
@@ -196,7 +195,7 @@ for (sample in 1:samplenumber) {
   sampledata$Sample <- rnorm(n = length(sampledata$FileNum), mean = sample, sd = 0.1)
   exprs_spread[[sample]] <- sampledata
   }
-exprs2 <- rbind.fill(exprs_spread)
+exprs_spread <- rbind.fill(exprs_spread)
 
 ```
 
@@ -205,15 +204,33 @@ exprs2 <- rbind.fill(exprs_spread)
 ```{r scoring, warning = FALSE, results = "asis"}
 
 ## Set up Scoring Tables
-scoretypes <- strsplit(params$scores, split = ",")[[1]] 
+scoretypes <- strsplit(params$SCORES, split = ",")[[1]] 
 nr  <- samplenumber
 nc  <- length(scoretypes)
 ndf <- length(lineage_channels)
 scores <- setNames(replicate(ndf,setNames(as.data.frame(matrix(nrow = nr, ncol = nc)),scoretypes),simplify=FALSE),lineage_channels)
 
 ## Set up Output Folder
-if (params$markernames) {dir.create(file.path(outputdir, "Markers"))} else {dir.create(file.path(outputdir, "Metals"))}
-if (params$markernames) {setwd(file.path(outputdir, "Markers"))} else {setwd(file.path(outputdir, "Metals"))}
+if (params$MARKERNAMES) {dir.create(file.path(outputdir, "Markers"))} else {dir.create(file.path(outputdir, "Metals"))}
+if (params$MARKERNAMES) {setwd(file.path(outputdir, "Markers"))} else {setwd(file.path(outputdir, "Metals"))}
+
+## Function for calculating Density in Density Plots
+get_density <- function(x, y, ...) {
+  dens <- MASS::kde2d(x, y, ...)
+  ix <- findInterval(x, dens$x)
+  iy <- findInterval(y, dens$y)
+  ii <- cbind(ix, iy)
+  return(dens$z[ii])
+}
+
+## Function for plotting Density Plot
+plotdensityplot <- function(x, y) {
+  dat <- data.frame(x = unname(x), y = unname(y))
+  dat <- dat[dat[2] > 0 ,]
+  dat$density <- get_density(dat[,1], dat[,2], n = 400)
+  return(ggplot(dat) + geom_point(aes(x, y, color = density), size = 1, show.legend = TRUE) + ylim(0, quantile(exprs[,marker], 0.9995))
+ + scale_colour_gradientn(colours = colorRamps::matlab.like2(100)) + labs(title = paste(marker, "-", metalmarkers[[marker]]), x = "Concentration", y = "Expression") + theme(text = element_text(size=5), axis.text.x = element_text(size=5, hjust=1), axis.text.y = element_text(size=5, hjust=1)) + geom_rect(xmin = bestsamples[[marker]]-0.5, ymin = 0, xmax = bestsamples[[marker]]+0.5, ymax = quantile(exprs[,marker], 0.9994), color = "red", fill = NA))
+}
 
 ## Main Marker Analysis Loop
 bestsamples <- list()
@@ -230,11 +247,11 @@ for (marker in lineage_channels) {
       spilloverreceiving <- data.frame(Receiving = compensationmatrix[, marker], row.names = spillovermarkers)
       spilloversummary <- data.frame(spillovercontributing, spilloverreceiving)
       spilloversummary <- spilloversummary[!(apply(spilloversummary, 1, function(x) all(is.na(x)))),]
-      cat("\n")
-      plot.new()
-      grid.table(as.data.frame(spilloversummary))
-      cat("\n")
-    } else {cat("\n- Marker", marker, "was not found in Spillover Table, not checking for spillover / compensating.", sep = " ")}
+      tkable <- knitr::kable(t(spilloversummary), caption = "Table Showing the spillover percentages both to and from other channels")
+      tkable <- kable_styling(tkable , bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = FALSE)
+      print(tkable)
+            
+    } else {cat("\n- Marker", marker, "was not found in Spillover Matrix. Not checking, scoring or compensating for spillover.", sep = " ")}
   }
 
   ## Score Markers Per Titration, Basic Scoring
@@ -251,7 +268,22 @@ for (marker in lineage_channels) {
     ## Spillover Scoring
     spillovermatrixmatrix <- compensationmatrix
     spillovermatrixmatrix[is.na(spillovermatrixmatrix)] <- 0    
-    if (!(marker %in% spillovermarkers)) {scores[[marker]][sample,scoretypes[4]] <- 1} else {
+    if (!(marker %in% spillovermarkers)) {scores[[marker]][sample,scoretypes[c(4,5)]] <- 1} else {
+      
+      ## Score Contributing Spillover
+      spilloverscore <- 0
+      for (spillovermarker in spillovermarkers) {
+        if ((spillovermatrixmatrix[marker,spillovermarker] > 0) & (spillovermarker != marker)) {
+          spilloverpercentage <- spillovermatrixmatrix[marker,spillovermarker]
+          uncomp_maxspilloverexpression <- quantile(fcs@exprs[current_rows,spillovermarker], 0.99)
+          uncomp_maxcurrentexpression <- quantile(fcs@exprs[current_rows,marker], 0.99)
+          spillovermarkerscore <- (uncomp_maxcurrentexpression*(spilloverpercentage/100))/uncomp_maxspilloverexpression
+          spilloverscore <- max(spilloverscore, spillovermarkerscore)
+        }
+      }
+      scores[[marker]][sample,scoretypes[4]] <- round(max(1-spilloverscore, 0),2)
+
+      ## Score Receiving Spillover
       spilloverscore <- 0
       for (spillovermarker in spillovermarkers) {
         if ((spillovermatrixmatrix[spillovermarker,marker] > 0) & (spillovermarker != marker)) {
@@ -259,12 +291,10 @@ for (marker in lineage_channels) {
           uncomp_maxspilloverexpression <- quantile(fcs@exprs[current_rows,spillovermarker], 0.99)
           uncomp_maxcurrentexpression <- quantile(fcs@exprs[current_rows,marker], 0.99)
           spillovermarkerscore <- (uncomp_maxspilloverexpression*(spilloverpercentage/100))/uncomp_maxcurrentexpression
-          # print(paste(marker, spillovermarker, spilloverpercentage, uncomp_maxspilloverexpression, uncomp_maxspilloverexpression, (uncomp_maxspilloverexpression*(spilloverpercentage/100)), spillovermarkerscore))
           spilloverscore <- max(spilloverscore, spillovermarkerscore)
-          #cat("\n### Spillover Warning: This Marker is Receiving Spillover from Marker ", spillovermarker, " at percentage ", spilloverpercentage, ".", "\n- For this experiment, ", spilloverpercentage, "% of Marker ", spillovermarker, "'s max expression (", uncomp_maxspilloverexpression, ") is ", uncomp_maxspilloverexpression*(spilloverpercentage/100), ", which is ", spilloverscore, "% of current marker ", marker, "'s max expression (", uncomp_maxcurrentexpression, ").", sep = "" )
         }
       }
-      scores[[marker]][sample,scoretypes[4]] <- round(max(1-spilloverscore, 0),2)
+      scores[[marker]][sample,scoretypes[5]] <- round(max(1-spilloverscore, 0),2)      
     }
   }
   
@@ -273,27 +303,21 @@ for (marker in lineage_channels) {
   scores[[marker]][scores[[marker]] == "NaN"] <- 0
   
   ## Calculate & Print Optimal Score
-  scores[[marker]][,scoretypes[5]] <- round(rowMeans(scores[[marker]][,1:4]),2) 
-  # scores[[marker]][,scoretypes[5]] <- round( rowMeans(scores[[marker]][,1:3]) * scores[[marker]][,4] ,2) 
+  scores[[marker]][,scoretypes[6]] <- round(rowMeans(scores[[marker]][,1:5]),2) 
   bestsamples[[marker]] <- as.numeric(rownames(scores[[marker]])[which.max(scores[[marker]]$`Overall / Weighted Score`)])
-  cat("\n")
-  plot.new()
-  grid.table(as.data.frame(scores[[marker]]))
-  cat("\n")
+  tkable <- knitr::kable(x = t(as.data.frame(scores[[marker]])), caption = "Table Showing all scores for this Marker, for each Concentration.")
+  tkable <- kable_styling(tkable , bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = FALSE)
+  print(tkable)
   
-  ## Plot & Save Plot
+  ## Plot Density Plot for Report
+  cat("\n- The Following Graph shows the intensity of each Concentration. Red box = Highest Overall Score.")
   if ((params$SPILLOVER == "Give Warnings & Compensate Data") & (marker %in% spillovermarkers)) 
-    {cat("\n- The Graph Below has been compensated for Spillover effects.")}
-
-  plot(exprs2[,c("Sample", marker)], pch=".", col = exprs$FileNum, main=paste(marker, "-", metalmarkers[[marker]]))
-  rect(xleft = bestsamples[[marker]]-0.5, ybottom = 0, xright = bestsamples[[marker]]+0.5, ytop = max(exprs[,marker]), border = "red")
-  if (params$markernames) {png(paste("Graph for ", marker,".png", sep = ""))} else {png(paste("Graph for ", marker,".png", sep = ""))}
-  plot(exprs2[,c("Sample", marker)], pch=".", col = exprs$FileNum, main=paste(marker, "-", metalmarkers[[marker]]))
-  rect(xleft = bestsamples[[marker]]-0.5, ybottom = 0, xright = bestsamples[[marker]]+0.5, ytop = max(exprs[,marker]), border = "red")
-  dev.off()
+    {cat("\n- This Graph has been compensated for Spillover effects.")} else {cat("\n- This Graph has NOT been compensated for any Spillover effects.")}
+  plotdensityplot(x = exprs_spread["Sample"], y = exprs_spread[marker])
   
-  ## Write Marker-Specific Score Table
-  write.table(t(as.data.frame(scores[[marker]])), sep = "\t", file = paste("Scores for", marker, ".tsv", sep = ""), col.names = TRUE)}
+  ## Save Marker-Specific Plot and Score Table as output files
+  ggsave(filename = paste("Graph for Marker ", marker, " - ", metalmarkers[[marker]], ".png", sep = ""))
+  write.table(t(as.data.frame(scores[[marker]])), sep = "\t", file = paste("Scores for Marker ", marker, " - ", metalmarkers[[marker]], ".tsv", sep = ""), col.names = TRUE)}
 
 ## Write Summary Table
 setwd(outputdir)
@@ -305,6 +329,6 @@ save.image(file = "R Workspace.Rdata")
 ```
 
 ```{r, include=FALSE}
-
+          #cat("\n### Spillover Warning: This Marker is Receiving Spillover from Marker ", spillovermarker, " at percentage ", spilloverpercentage, ".", "\n- For this experiment, ", spilloverpercentage, "% of Marker ", spillovermarker, "'s max expression (", uncomp_maxspilloverexpression, ") is ", uncomp_maxspilloverexpression*(spilloverpercentage/100), ", which is ", spilloverscore, "% of current marker ", marker, "'s max expression (", uncomp_maxcurrentexpression, ").", sep = "" )
 
 ```
