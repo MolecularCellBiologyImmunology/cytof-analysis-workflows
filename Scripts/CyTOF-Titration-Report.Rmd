@@ -13,15 +13,15 @@ output:
 params:
   PREGATING_CHANNELS:
     label: "If the following markers exist, assign them to Pregating Channels and do not plot/score them. Seperated by spaces."
-    value: "Ce140Di Ir191Di Ir193Di Rh103Di"
+    value: "Ce140Di Ir191Di Ir193Di Rh103Di Pd102Di Pd104Di Pd105Di Pd108Di Pd110Di Xe131Di Ce133Di Ba138Di BCKG190Di"
     input: text
   INSTRUMENT_CHANNELS:
     label: "If the following channels exist, assign them to Instrument Channels and do not plot/score them. Sperated by spaces."
     value: "Time Event_length Center SampleID Offset Width Residual FileNum"
     input: text
-  PREAGES:
+  PREGATES:
     label: "Perform the following pregates (with format 'channel{<or>}threshold'). Seperated by spaces."
-    value: ""
+    value: "" #Ce140Di<250 Ir191Di>200 Ir191Di<450 Y89Di>10
     input: text
   SPILLOVER:
     label: "Perform the following actions regarding Spillover:"
@@ -32,10 +32,6 @@ params:
     label: "If previous is not 'Do Nothing', use the following Spillover Matrix file."
     value: "../Supplemental Data/Spillover_Fluidigm.xlsx"
     input: file
-  MARKERNAMES:
-    label: "Save files with marker names instead of metal names."
-    value: FALSE
-    input: checkbox     
   ARCSINH: 
     label: "Perform ArcSinh transformation on data."
     value: TRUE
@@ -43,10 +39,14 @@ params:
   ARCSINHCOFAC: 
     label: "Cofactor to use during ArcSinh transformation."
     value: 5
-    input: numeric            
+    input: numeric 
+  DENSITYSQUARES: 
+    label: "Amount of squares for Density plot. 100-200 recommended. Higher = more detail & more memory required."
+    value: 150
+    input: numeric 
   SCORES:
     label: "Names of score types, seperated by commas.*"
-    value: "Intensity Score,AOF Score,Concentration Score,Spillover Score (Causing),Spillover Score (Receiving),Overall / Weighted Score"
+    value: "Intensity Score,AOF Score,Concentration Score,Spillover Score (Contributing),Spillover Score (Receiving),Overall / Weighted Score"
     input: text
   K: 
     label: "Size of local neighborhood used for Area Overlap Frequency (AOF) calculation."
@@ -97,9 +97,15 @@ if (!concat) {fcs <- read.FCS(filename = files, transformation = FALSE)} else {f
 write.FCS(fcs, filename = paste(outputdir,".fcs",sep=""))}
 exprs <- as.data.frame(fcs@exprs)
 
+## Check is Sample column is present, otherwise stop
 if (is.null(exprs$FileNum)) {stop("This Single File was not concatenated using this Script! Please re-concatenate your file using this script.")}
 samplenumber <- length(unique(exprs$FileNum))
 
+## Save current data as "uncompensated" in case compensation occurs and comparisons are needed
+fcs_uncompensated <- fcs
+exprs_uncompensated <- exprs
+
+## Display 
 fcs@parameters@data
 t(summary(exprs))
 
@@ -118,7 +124,9 @@ if (params$SPILLOVER != "Do Nothing") {
   spillovermarkers <- rownames(compensationmatrix)  
   if (params$SPILLOVER == "Give Warnings & Compensate Data") {
     fcs_compensated <- compensate(x = fcs, spillover = compensationmatrix)
+    fcs <- fcs_compensated
     exprs_compensated <- as.data.frame(fcs_compensated@exprs)
+    exprs <- exprs_compensated
     t(summary(exprs_compensated))
   }
 }
@@ -126,8 +134,8 @@ if (params$SPILLOVER != "Do Nothing") {
 ## Data Pre-Gating
 pregating <- function(x, pregate) {
   message(paste("Applying Pregate", pregate));
-  if (grepl("<", pregate, fixed=TRUE)) {filterargs <- strsplit(pregate, split = "<")[[1]]; exprs2 <- dplyr::filter(x, filterargs[1] < as.numeric(filterargs[2]) ) };
-  if (grepl(">", pregate, fixed=TRUE)) {filterargs <- strsplit(pregate, split = ">")[[1]]; exprs2 <- dplyr::filter(x, filterargs[1] > as.numeric(filterargs[2]) ) };
+  if (grepl("<", pregate, fixed=TRUE)) {filterargs <- strsplit(pregate, split = "<")[[1]]; exprs2 <- exprs[exprs[filterargs[1]] < as.numeric(filterargs[2]),]};
+  if (grepl(">", pregate, fixed=TRUE)) {filterargs <- strsplit(pregate, split = ">")[[1]]; exprs2 <- exprs[exprs[filterargs[1]] > as.numeric(filterargs[2]),]};
   num_removed <- dim(x)[1] - dim(exprs2)[1] 
   print(paste("Pregate", pregate, "applied succesfully.", num_removed, "cells have been filtered out.")) 
   return(exprs2) }
@@ -142,13 +150,10 @@ instrument_channels <- strsplit(params$INSTRUMENT_CHANNELS, split = " ")[[1]]
 instrument_channels <- instrument_channels[instrument_channels %in% colnames(exprs)]
 lineage_channels <- unlist(colnames(exprs))[!unlist(colnames(exprs)) %in% c(pregating_channels,instrument_channels)]
 
-## Make colnames human readable using information in the parameter data slot
+## Combine Metal and Marker names to make it human readable, using information in the parameter data slot
 metalmarkers <- list()
 markers <- gsub(pattern = ".*_", replacement = "", x = as.vector(fcs@parameters@data$desc));
-if (params$MARKERNAMES) {
-  for (markerid in which(!is.na(markers))) {metalmarkers[[markers[markerid]]] <- colnames(exprs)[markerid]}
-  colnames(exprs)[which(!is.na(markers))] <- markers[which(!is.na(markers))]
-} else {for (markerid in which(!is.na(markers))) {metalmarkers[[colnames(exprs)[markerid]]] <- markers[markerid]}}
+for (markerid in which(!is.na(markers))) {metalmarkers[[colnames(exprs)[markerid]]] <- markers[markerid]}
 
 ## Bead Normalization: Already performed by software before data import
 ## Compensation:       Already performed by software before data import
@@ -186,7 +191,7 @@ exprs$Sample <- NA
 for (sample in 1:samplenumber) {
   message(paste("\nClustering Sample",sample,"out of", samplenumber))
   sampledata <- dplyr::filter(exprs, exprs$FileNum == sample)
-  Rphenograph_out <- Rphenograph::Rphenograph(sampledata[,lineage_channels], K = params$K)
+  Rphenograph_out <- Rphenograph::Rphenograph(sampledata[,lineage_channels], k = params$K)
   AOF <- greedyCytometryAof(fcs_data = sampledata[,lineage_channels], y = Rphenograph_out[[2]]$membership)
   AOFScores[[sample]] <- column_to_rownames(.data = AOF, var = "ChannelName")
    
@@ -195,6 +200,7 @@ for (sample in 1:samplenumber) {
   sampledata$Sample <- rnorm(n = length(sampledata$FileNum), mean = sample, sd = 0.1)
   exprs_spread[[sample]] <- sampledata
   }
+
 exprs_spread <- rbind.fill(exprs_spread)
 
 ```
@@ -211,8 +217,8 @@ ndf <- length(lineage_channels)
 scores <- setNames(replicate(ndf,setNames(as.data.frame(matrix(nrow = nr, ncol = nc)),scoretypes),simplify=FALSE),lineage_channels)
 
 ## Set up Output Folder
-if (params$MARKERNAMES) {dir.create(file.path(outputdir, "Markers"))} else {dir.create(file.path(outputdir, "Metals"))}
-if (params$MARKERNAMES) {setwd(file.path(outputdir, "Markers"))} else {setwd(file.path(outputdir, "Metals"))}
+if (!(dir.exists(file.path(outputdir, "Markers")))) {dir.create(file.path(outputdir, "Markers"))}
+setwd(paste(outputdir,"Markers", sep = "\\"))
 
 ## Function for calculating Density in Density Plots
 get_density <- function(x, y, ...) {
@@ -227,15 +233,15 @@ get_density <- function(x, y, ...) {
 plotdensityplot <- function(x, y) {
   dat <- data.frame(x = unname(x), y = unname(y))
   dat <- dat[dat[2] > 0 ,]
-  dat$density <- get_density(dat[,1], dat[,2], n = 400)
+  dat$density <- get_density(dat[,1], dat[,2], n = params$DENSITYSQUARES)
   return(ggplot(dat) + geom_point(aes(x, y, color = density), size = 1, show.legend = TRUE) + ylim(0, quantile(exprs[,marker], 0.9995))
- + scale_colour_gradientn(colours = colorRamps::matlab.like2(100)) + labs(title = paste(marker, "-", metalmarkers[[marker]]), x = "Concentration", y = "Expression") + theme(text = element_text(size=5), axis.text.x = element_text(size=5, hjust=1), axis.text.y = element_text(size=5, hjust=1)) + geom_rect(xmin = bestsamples[[marker]]-0.5, ymin = 0, xmax = bestsamples[[marker]]+0.5, ymax = quantile(exprs[,marker], 0.9994), color = "red", fill = NA))
+ + scale_colour_gradientn(colours = colorRamps::matlab.like2(100)) + labs(title = paste(marker, "-", metalmarkers[[marker]]), x = "Concentration", y = "Expression") + theme(text = element_text(size=20), axis.text.x = element_text(size=20, hjust=1), axis.text.y = element_text(size=20, hjust=1)) + geom_rect(xmin = bestsamples[[marker]]-0.5, ymin = 0, xmax = bestsamples[[marker]]+0.5, ymax = quantile(exprs[,marker], 0.9994), color = "red", fill = NA))
 }
 
 ## Main Marker Analysis Loop
 bestsamples <- list()
 for (marker in lineage_channels) {
-  cat("\n\n## Marker:", marker)
+  cat("<br><br>## ", paste(marker, "-", metalmarkers[[marker]]))
   cat("\n")
   maxexpression <- quantile(exprs[,marker], 0.99)
   
@@ -243,12 +249,13 @@ for (marker in lineage_channels) {
   if (params$SPILLOVER != "Do Nothing") {
     if (marker %in% spillovermarkers) {
       spillovercontributing <- as.data.frame(t(compensationmatrix[marker, ])) 
-      colnames(spillovercontributing) <- "Contributing"
-      spilloverreceiving <- data.frame(Receiving = compensationmatrix[, marker], row.names = spillovermarkers)
+      colnames(spillovercontributing) <- "Percentage Contributing"
+      spilloverreceiving <- data.frame("Percentage Receiving" = compensationmatrix[, marker], row.names = spillovermarkers)
       spilloversummary <- data.frame(spillovercontributing, spilloverreceiving)
       spilloversummary <- spilloversummary[!(apply(spilloversummary, 1, function(x) all(is.na(x)))),]
-      tkable <- knitr::kable(t(spilloversummary), caption = "Table Showing the spillover percentages both to and from other channels")
-      tkable <- kable_styling(tkable , bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = FALSE)
+      spilloversummary[is.na(spilloversummary)] <- 0
+      tkable <- knitr::kable(t(spilloversummary), caption = "Table showing the spillover percentages both to and from other channels")
+      tkable <- kable_styling(tkable , bootstrap_options = c("striped", "hover", "responsive"), full_width = FALSE)
       print(tkable)
             
     } else {cat("\n- Marker", marker, "was not found in Spillover Matrix. Not checking, scoring or compensating for spillover.", sep = " ")}
@@ -313,11 +320,13 @@ for (marker in lineage_channels) {
   cat("\n- The Following Graph shows the intensity of each Concentration. Red box = Highest Overall Score.")
   if ((params$SPILLOVER == "Give Warnings & Compensate Data") & (marker %in% spillovermarkers)) 
     {cat("\n- This Graph has been compensated for Spillover effects.")} else {cat("\n- This Graph has NOT been compensated for any Spillover effects.")}
-  plotdensityplot(x = exprs_spread["Sample"], y = exprs_spread[marker])
+  densityplot <- plotdensityplot(x = exprs_spread["Sample"], y = exprs_spread[marker])
+  print(densityplot)
   
   ## Save Marker-Specific Plot and Score Table as output files
-  ggsave(filename = paste("Graph for Marker ", marker, " - ", metalmarkers[[marker]], ".png", sep = ""))
-  write.table(t(as.data.frame(scores[[marker]])), sep = "\t", file = paste("Scores for Marker ", marker, " - ", metalmarkers[[marker]], ".tsv", sep = ""), col.names = TRUE)}
+  ggsave(plot = densityplot, filename = paste("Graph for Marker ", marker, " - ", metalmarkers[[marker]], ".png", sep = ""))
+  write.table(t(as.data.frame(scores[[marker]])), sep = "\t", col.names = TRUE, 
+              file = paste("Scores for Marker ", marker, " - ", metalmarkers[[marker]], ".tsv", sep = ""))}
 
 ## Write Summary Table
 setwd(outputdir)
