@@ -244,8 +244,8 @@ plotviolinplot <- function(x, y) {
 plotdensityplot <- function(x, y) {
   dat <- data.frame(x = unname(x), y = unname(y))
   dat <- dat[dat[2] > 0 ,]
-  return(ggplot(dat, aes(x, y, fill = ..density..)) + 
-           geom_bin2d(bins = 100, show.legend = TRUE) + 
+  return(ggplot(dat) + 
+           geom_bin2d(aes(x, y, fill = ..density..), bins = 100, show.legend = TRUE) + 
            scale_fill_gradientn(colours = colorRamps::matlab.like2(100)) + 
            ylim(0, quantile(exprs[,marker], 0.9995))  + 
            labs(title = paste(marker, "-", metalmarkers[[marker]]), x = "Concentration", y = "Expression") + 
