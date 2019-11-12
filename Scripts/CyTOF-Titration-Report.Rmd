@@ -230,7 +230,6 @@ bestsamples <- list()
 plotviolinplot <- function(x, y) {
   dat <- data.frame(x = unname(x), y = unname(y))
   dat <- dat[dat[2] > 0 ,]
-<<<<<<< HEAD
   return(ggplot(dat, aes(x, y, fill = x)) + 
            geom_violin(show.legend = TRUE) + 
            ylim(0, quantile(exprs[,marker], 0.9995))  + 
@@ -241,14 +240,10 @@ plotviolinplot <- function(x, y) {
            scale_fill_manual(values = rev(colorRampPalette(colors = RColorBrewer::brewer.pal(name = "Blues", n = 9))(length(unique(dat$x))))) + 
            theme_classic() + 
            geom_boxplot(width=0.1, outlier.size = 0, outlier.stroke = 0))}
-=======
-  return(ggplot(dat) + geom_violin(aes(x, y, fill = x), show.legend = TRUE) + ylim(0, quantile(exprs[,marker], 0.9995))  + scale_x_discrete(breaks = seq(1:samplenumber)) + labs(title = paste(marker, "-", metalmarkers[[marker]]), x = "Concentration", y = "Expression") + theme(text = element_text(size=20), axis.text.x = element_text(size=20, hjust=1), axis.text.y = element_text(size=20, hjust=1)) + geom_rect(xmin = bestsamples[[marker]]-0.5, ymin =-0.10, xmax = bestsamples[[marker]]+0.5, ymax = quantile(exprs[,marker], 0.9994), color = "red", fill = NA) + scale_fill_brewer(direction = -1, palette="Blues") + theme_classic())} # + geom_boxplot(width=0.1) 
->>>>>>> eb6a6a4d6835886af27d79d4c842f42c10259c3d
 
 plotdensityplot <- function(x, y) {
   dat <- data.frame(x = unname(x), y = unname(y))
   dat <- dat[dat[2] > 0 ,]
-<<<<<<< HEAD
   return(ggplot(dat, aes(x, y, fill = ..density..)) + 
            geom_bin2d(bins = 100, show.legend = TRUE) + 
            scale_fill_gradientn(colours = colorRamps::matlab.like2(100)) + 
@@ -257,9 +252,6 @@ plotdensityplot <- function(x, y) {
            theme(text = element_text(size=20), axis.text.x = element_text(size=20, hjust=1), axis.text.y = element_text(size=20, hjust=1)) + 
            geom_rect(xmin = bestsamples[[marker]]-0.5, ymin = 0, xmax = bestsamples[[marker]]+0.5, ymax = quantile(exprs[,marker], 0.9994), color = "red", fill = NA) + 
            scale_x_continuous(breaks = seq(1:samplenumber)))}
-=======
-  return(ggplot(dat) + geom_bin2d(aes(x, y, fill = ..density..), bins = 100, show.legend = TRUE) + scale_fill_gradientn(colours = colorRamps::matlab.like2(100)) + ylim(0, quantile(exprs[,marker], 0.9995))  + labs(title = paste(marker, "-", metalmarkers[[marker]]), x = "Concentration", y = "Expression") + theme(text = element_text(size=20), axis.text.x = element_text(size=20, hjust=1), axis.text.y = element_text(size=20, hjust=1)) + geom_rect(xmin = bestsamples[[marker]]-0.5, ymin = 0, xmax = bestsamples[[marker]]+0.5, ymax = quantile(exprs[,marker], 0.9994), color = "red", fill = NA) + scale_x_continuous(breaks = seq(1:samplenumber)))}
->>>>>>> eb6a6a4d6835886af27d79d4c842f42c10259c3d
 
 ## Base Scoring Loop, Scoring each Marker Per Titration
 densityplots <- list()
@@ -273,11 +265,7 @@ for (marker in lineage_channels) {
     scores[[marker]][sample,scoretypes[2]] <- round(1-AOFScores[[sample]][marker,"Aof"],2)
     scores[[marker]][sample,scoretypes[3]] <- round(sqrt(sample / 10), 2)
   }
-<<<<<<< HEAD
   
-=======
-
->>>>>>> eb6a6a4d6835886af27d79d4c842f42c10259c3d
   ## Corrections for Intensity Scores
   scores[[marker]][,scoretypes[1]] <- round(scores[[marker]][,scoretypes[1]] / (max(scores[[marker]][,scoretypes[1]])),2)
   scores[[marker]][scores[[marker]] == "NaN"] <- 0
@@ -293,11 +281,7 @@ for (marker in lineage_channels) {
 
 ```
 
-<<<<<<< HEAD
 # 6. Generating Tables & Plots
-=======
-
->>>>>>> eb6a6a4d6835886af27d79d4c842f42c10259c3d
 
 ```{r output, warning = FALSE, message = FALSE, results = "asis"}
 ## Set up Output Folder
@@ -318,25 +302,15 @@ plotspilloverplot <- function(x, y) {
 
 ## Main Output Loop
 for (marker in lineage_channels) {
-<<<<<<< HEAD
   cat("## ", paste(marker, "-", metalmarkers[[marker]], "\n"))
   message("Generating Plots and Tables for Marker ", marker, " (", which(marker == lineage_channels), " out of ", length(lineage_channels), ").")
-=======
-  message("Generating Plots and Tables for Marker ", marker, " (", which(marker == lineage_channels), " out of ", length(lineage_channels), ").")
-  cat("## ", paste(marker, "-", metalmarkers[[marker]], "\n"))
->>>>>>> eb6a6a4d6835886af27d79d4c842f42c10259c3d
   
   ## Check if Spillover needed
   if (params$SPILLOVER != "Do Nothing") {
     if (!(marker %in% spillovermarkers))  {
       cat("\n- Marker", marker, "was not found in Spillover Matrix. Not checking, scoring or compensating for spillover.", sep = " ")
-<<<<<<< HEAD
     } else {
       
-=======
-      } else {
-    
->>>>>>> eb6a6a4d6835886af27d79d4c842f42c10259c3d
       ## Set up Table with Relevant Spillover Matrix Information
       spillovercontributing <- as.data.frame(t(compensationmatrix[marker, ])) 
       colnames(spillovercontributing) <- "Percentage Contributing"
@@ -346,7 +320,6 @@ for (marker in lineage_channels) {
       spilloversummary[is.na(spilloversummary)] <- 0
       spilloversummary$Ratio.of.max.Contributing <- NA
       spilloversummary$Ratio.of.max.Receiving <- NA
-<<<<<<< HEAD
       
       ## Spillover Scoring
       spillover_worst_contributor_score <- 0
@@ -357,18 +330,6 @@ for (marker in lineage_channels) {
       uncomp_maxcurrentexpression <- quantile(fcs@exprs[current_rows,marker], 0.98)
       if (uncomp_maxcurrentexpression == 0) {uncomp_maxcurrentexpression <- quantile(fcs@exprs[current_rows,marker], 0.995)}
       
-=======
-      
-      ## Spillover Scoring
-      spillover_worst_contributor_score <- 0
-      spillover_worst_receiver_score <- 0
-      spillover_worst_contributor <- NA
-      spillover_worst_receiver <- NA
-      current_rows <- fcs@exprs[,"FileNum"] == bestsamples[marker]
-      uncomp_maxcurrentexpression <- quantile(fcs@exprs[current_rows,marker], 0.98)
-      if (uncomp_maxcurrentexpression == 0) {uncomp_maxcurrentexpression <- quantile(fcs@exprs[current_rows,marker], 0.995)}
-      
->>>>>>> eb6a6a4d6835886af27d79d4c842f42c10259c3d
       ## For each Spillover Marker
       for (spillovermarker in spillovermarkers) {try({
         if (((spillovermatrix[marker,spillovermarker] > 0) | (spillovermatrix[spillovermarker,marker] > 0)) & (spillovermarker != marker)) {
@@ -381,18 +342,13 @@ for (marker in lineage_channels) {
           spillovermarkerscore <- (uncomp_maxcurrentexpression*(spilloverpercentage/100))/uncomp_maxspilloverexpression
           spilloversummary[spillovermarker,"Ratio.of.max.Contributing"] <- round(spillovermarkerscore, 2)
           spillover_worst_contributor_score <- max(spillover_worst_contributor_score, round(spillovermarkerscore, 2))
-<<<<<<< HEAD
           if (spillover_worst_contributor_score == round(spillovermarkerscore,2)) {spillover_worst_contributor <- spillovermarker}
-=======
-          if (spillover_worst_contributor_score == spillovermarkerscore) {spillover_worst_contributor <- spillovermarker}
->>>>>>> eb6a6a4d6835886af27d79d4c842f42c10259c3d
           
           ## Score Receiving Spillover
           spilloverpercentage <- spillovermatrix[spillovermarker,marker]
           spillovermarkerscore <- (uncomp_maxspilloverexpression*(spilloverpercentage/100))/uncomp_maxcurrentexpression
           spilloversummary[spillovermarker,"Ratio.of.max.Receiving"] <- round(spillovermarkerscore, 2)
           spillover_worst_receiver_score <- max(spillover_worst_receiver_score, round(spillovermarkerscore, 2))
-<<<<<<< HEAD
           if (spillover_worst_receiver_score == round(spillovermarkerscore,2)) {spillover_worst_receiver <- spillovermarker}
           
           
@@ -418,33 +374,6 @@ for (marker in lineage_channels) {
         spilloverplot_filename <- paste("Spillover Plots for Marker ", marker, " - ", metalmarkers[[marker]], ".png", sep = "")
         suppressMessages(ggsave(plot = finalspilloverplots[[marker]], filename = spilloverplot_filename))
       }
-=======
-          if (spillover_worst_receiver_score == spillovermarkerscore) {spillover_worst_receiver <- spillovermarker}
-           
-          
-          ## Generate Spillover Plot between two markers
-          spilloverplots[[marker]][[spillovermarker]] <- plotspilloverplot(x = exprs[marker], y = exprs[spillovermarker])
-        }
-      })}
-      
-      ## Print Spillover Summary for this Marker
-      spilloversummaries[[marker]] <- spilloversummary
-      spilloversummary <- knitr::kable(spilloversummary, caption = "Table showing the spillover percentages and ratios both to and from other channels")
-      spilloversummary <- kable_styling(spilloversummary, bootstrap_options = c("striped", "hover", "responsive"), full_width = FALSE)
-      print(spilloversummary)
-      cat("Marker Contributing Worst Spillover Relative to this marker:", spillover_worst_contributor, "with ratio of", spillover_worst_contributor_score)
-      cat("\n")
-      cat("Marker Receiving Relative Worst Spillover from this marker:", spillover_worst_receiver, "with ratio of", spillover_worst_receiver_score)
-      
-      ## Print Spillover Plots for this Marker
-      if (!(is.null(spilloverplots[[marker]]))) {
-        finalspilloverplots[[marker]] <- do.call("grid.arrange", c(spilloverplots[[marker]], ncol = ceiling(sqrt(length(spilloverplots[[marker]])))))
-
-        ## Save Marker-Specific Spillover Plots and Spillover Summary Tables as output files
-        spilloverplot_filename <- paste("Spillover Plots for Marker ", marker, " - ", metalmarkers[[marker]], ".png", sep = "")
-        suppressMessages(ggsave(plot = finalspilloverplots[[marker]], filename = spilloverplot_filename))
-        }
->>>>>>> eb6a6a4d6835886af27d79d4c842f42c10259c3d
       spilloversummarytable_filename <- paste("Spillover Summary for Marker ", marker, " - ", metalmarkers[[marker]], ".tsv", sep = "")
       write.table(spilloversummaries[[marker]], sep = "\t", col.names = TRUE, file = spilloversummarytable_filename)
     }
@@ -468,11 +397,8 @@ for (marker in lineage_channels) {
   scoretable_filename <- paste("Scores for Marker ", marker, " - ", metalmarkers[[marker]], ".tsv", sep = "")
   write.table(t(as.data.frame(scores[[marker]])), sep = "\t", col.names = TRUE, file = scoretable_filename)
 }
-<<<<<<< HEAD
 
 message("\n\nFinishing up by Exporting R Workspace and Finalizing Report...")
-=======
->>>>>>> eb6a6a4d6835886af27d79d4c842f42c10259c3d
 
 ## Write Summary Table
 setwd(outputdir)
