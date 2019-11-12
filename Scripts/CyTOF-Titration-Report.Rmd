@@ -40,13 +40,17 @@ params:
     label: "Cofactor to use during ArcSinh transformation."
     value: 5
     input: numeric 
+  VIOLINPLOT: 
+    label: "Use a Violin instead of Density Plot for Single Marker Titration Plots"
+    value: FALSE
+    input: checkbox     
   DENSITYSQUARES: 
-    label: "Amount of squares for Density plot. 100-200 recommended. Higher = more detail & more memory required."
+    label: "Amount of squares for Density plot. 50-150 recommended. Higher = more detail, but more memory required."
     value: 150
     input: numeric 
   SCORES:
     label: "Names of score types, seperated by commas.*"
-    value: "Intensity Score,AOF Score,Concentration Score,Spillover Score (Contributing),Spillover Score (Receiving),Overall / Weighted Score"
+    value: "Intensity Score,AOF Score,Concentration Score,Overall / Weighted Score"
     input: text
   K: 
     label: "Size of local neighborhood used for Area Overlap Frequency (AOF) calculation."
@@ -121,8 +125,13 @@ if (params$SPILLOVER != "Do Nothing") {
   spillovermatrix <- readxl::read_xlsx(path = params$SPILLOVERMATRIX)
   spillovermatrix <- tibble::column_to_rownames(spillovermatrix, colnames(spillovermatrix)[1])
   compensationmatrix <- spillovermatrix[rownames(spillovermatrix) %in% colnames(fcs@exprs), colnames(spillovermatrix) %in% colnames(fcs@exprs)]
-  spillovermarkers <- rownames(compensationmatrix)  
-  if (params$SPILLOVER == "Give Warnings & Compensate Data") {
+  
+  spillovermarkers <- character()
+  for (spillovermarker in rownames(compensationmatrix)) {
+    if ((sum(!is.na(compensationmatrix[spillovermarker])) + sum(!is.na(compensationmatrix[,spillovermarker]))) > 2) 
+      {spillovermarkers <- c(spillovermarkers,spillovermarker)}}
+  
+    if (params$SPILLOVER == "Give Warnings & Compensate Data") {
     fcs_compensated <- compensate(x = fcs, spillover = compensationmatrix)
     fcs <- fcs_compensated
     exprs_compensated <- as.data.frame(fcs_compensated@exprs)
@@ -209,124 +218,187 @@ exprs_spread <- rbind.fill(exprs_spread)
 
 ```{r scoring, warning = FALSE, results = "asis"}
 
-## Set up Scoring Tables
+## Set up Scoring Tables & Lists
 scoretypes <- strsplit(params$SCORES, split = ",")[[1]] 
 nr  <- samplenumber
 nc  <- length(scoretypes)
 ndf <- length(lineage_channels)
 scores <- setNames(replicate(ndf,setNames(as.data.frame(matrix(nrow = nr, ncol = nc)),scoretypes),simplify=FALSE),lineage_channels)
+bestsamples <- list()
 
-## Set up Output Folder
-if (!(dir.exists(file.path(outputdir, "Markers")))) {dir.create(file.path(outputdir, "Markers"))}
-setwd(paste(outputdir,"Markers", sep = "\\"))
+## Plot Functions
+plotviolinplot <- function(x, y) {
+  dat <- data.frame(x = unname(x), y = unname(y))
+  dat <- dat[dat[2] > 0 ,]
+  return(ggplot(dat, aes(x, y, fill = x)) + 
+           geom_violin(show.legend = TRUE) + 
+           ylim(0, quantile(exprs[,marker], 0.9995))  + 
+           scale_x_discrete(breaks = seq(1:samplenumber)) + 
+           labs(title = paste(marker, "-", metalmarkers[[marker]]), x = "Concentration", y = "Expression") + 
+           theme(text = element_text(size=20), axis.text.x = element_text(size=20, hjust=1), axis.text.y = element_text(size=20, hjust=1)) + 
+           geom_rect(xmin = bestsamples[[marker]]-0.5, ymin =-0.10, xmax = bestsamples[[marker]]+0.5, ymax = quantile(exprs[,marker], 0.9994), color = "red", fill = NA) +
+           scale_fill_manual(values = rev(colorRampPalette(colors = RColorBrewer::brewer.pal(name = "Blues", n = 9))(length(unique(dat$x))))) + 
+           theme_classic() + 
+           geom_boxplot(width=0.1, outlier.size = 0, outlier.stroke = 0))}
 
-## Function for calculating Density in Density Plots
-get_density <- function(x, y, ...) {
-  dens <- MASS::kde2d(x, y, ...)
-  ix <- findInterval(x, dens$x)
-  iy <- findInterval(y, dens$y)
-  ii <- cbind(ix, iy)
-  return(dens$z[ii])
-}
-
-## Function for plotting Density Plot
 plotdensityplot <- function(x, y) {
   dat <- data.frame(x = unname(x), y = unname(y))
   dat <- dat[dat[2] > 0 ,]
-  dat$density <- get_density(dat[,1], dat[,2], n = params$DENSITYSQUARES)
-  return(ggplot(dat) + geom_point(aes(x, y, color = density), size = 1, show.legend = TRUE) + ylim(0, quantile(exprs[,marker], 0.9995))
- + scale_colour_gradientn(colours = colorRamps::matlab.like2(100)) + labs(title = paste(marker, "-", metalmarkers[[marker]]), x = "Concentration", y = "Expression") + theme(text = element_text(size=20), axis.text.x = element_text(size=20, hjust=1), axis.text.y = element_text(size=20, hjust=1)) + geom_rect(xmin = bestsamples[[marker]]-0.5, ymin = 0, xmax = bestsamples[[marker]]+0.5, ymax = quantile(exprs[,marker], 0.9994), color = "red", fill = NA))
-}
+  return(ggplot(dat, aes(x, y, fill = ..density..)) + 
+           geom_bin2d(bins = 100, show.legend = TRUE) + 
+           scale_fill_gradientn(colours = colorRamps::matlab.like2(100)) + 
+           ylim(0, quantile(exprs[,marker], 0.9995))  + 
+           labs(title = paste(marker, "-", metalmarkers[[marker]]), x = "Concentration", y = "Expression") + 
+           theme(text = element_text(size=20), axis.text.x = element_text(size=20, hjust=1), axis.text.y = element_text(size=20, hjust=1)) + 
+           geom_rect(xmin = bestsamples[[marker]]-0.5, ymin = 0, xmax = bestsamples[[marker]]+0.5, ymax = quantile(exprs[,marker], 0.9994), color = "red", fill = NA) + 
+           scale_x_continuous(breaks = seq(1:samplenumber)))}
 
-## Main Marker Analysis Loop
-bestsamples <- list()
+## Base Scoring Loop, Scoring each Marker Per Titration
+densityplots <- list()
 for (marker in lineage_channels) {
-  cat("<br><br>## ", paste(marker, "-", metalmarkers[[marker]]))
-  cat("\n")
-  maxexpression <- quantile(exprs[,marker], 0.99)
-  
-  ## Check for spillover and give Spillover Table if possible
-  if (params$SPILLOVER != "Do Nothing") {
-    if (marker %in% spillovermarkers) {
-      spillovercontributing <- as.data.frame(t(compensationmatrix[marker, ])) 
-      colnames(spillovercontributing) <- "Percentage Contributing"
-      spilloverreceiving <- data.frame("Percentage Receiving" = compensationmatrix[, marker], row.names = spillovermarkers)
-      spilloversummary <- data.frame(spillovercontributing, spilloverreceiving)
-      spilloversummary <- spilloversummary[!(apply(spilloversummary, 1, function(x) all(is.na(x)))),]
-      spilloversummary[is.na(spilloversummary)] <- 0
-      tkable <- knitr::kable(t(spilloversummary), caption = "Table showing the spillover percentages both to and from other channels")
-      tkable <- kable_styling(tkable , bootstrap_options = c("striped", "hover", "responsive"), full_width = FALSE)
-      print(tkable)
-            
-    } else {cat("\n- Marker", marker, "was not found in Spillover Matrix. Not checking, scoring or compensating for spillover.", sep = " ")}
-  }
-
-  ## Score Markers Per Titration, Basic Scoring
+  maxexpression <- quantile(exprs[,marker], 0.98)
   scores$marker <- as.data.frame(scores$marker)
   for (sample in 1:samplenumber) {
-    current_rows <- fcs@exprs[,"FileNum"] == sample
     sampledata <- dplyr::filter(exprs, exprs$FileNum == sample)[,marker]
-    
-    scores[[marker]][sample,scoretypes[1]] <- round((quantile(as.numeric(sampledata), 0.99)) / maxexpression, 2)
+    scores[[marker]][sample,scoretypes[1]] <- round((quantile(as.numeric(sampledata), 0.98)) / maxexpression, 2)
     #scores[[marker]][sample,scoretypes[2]] <- round(log((1-AOFScores[[sample]][marker,"Aof"])*100,10)/2,2)
     scores[[marker]][sample,scoretypes[2]] <- round(1-AOFScores[[sample]][marker,"Aof"],2)
     scores[[marker]][sample,scoretypes[3]] <- round(sqrt(sample / 10), 2)
-    
-    ## Spillover Scoring
-    spillovermatrixmatrix <- compensationmatrix
-    spillovermatrixmatrix[is.na(spillovermatrixmatrix)] <- 0    
-    if (!(marker %in% spillovermarkers)) {scores[[marker]][sample,scoretypes[c(4,5)]] <- 1} else {
-      
-      ## Score Contributing Spillover
-      spilloverscore <- 0
-      for (spillovermarker in spillovermarkers) {
-        if ((spillovermatrixmatrix[marker,spillovermarker] > 0) & (spillovermarker != marker)) {
-          spilloverpercentage <- spillovermatrixmatrix[marker,spillovermarker]
-          uncomp_maxspilloverexpression <- quantile(fcs@exprs[current_rows,spillovermarker], 0.99)
-          uncomp_maxcurrentexpression <- quantile(fcs@exprs[current_rows,marker], 0.99)
-          spillovermarkerscore <- (uncomp_maxcurrentexpression*(spilloverpercentage/100))/uncomp_maxspilloverexpression
-          spilloverscore <- max(spilloverscore, spillovermarkerscore)
-        }
-      }
-      scores[[marker]][sample,scoretypes[4]] <- round(max(1-spilloverscore, 0),2)
-
-      ## Score Receiving Spillover
-      spilloverscore <- 0
-      for (spillovermarker in spillovermarkers) {
-        if ((spillovermatrixmatrix[spillovermarker,marker] > 0) & (spillovermarker != marker)) {
-          spilloverpercentage <- spillovermatrixmatrix[spillovermarker,marker]
-          uncomp_maxspilloverexpression <- quantile(fcs@exprs[current_rows,spillovermarker], 0.99)
-          uncomp_maxcurrentexpression <- quantile(fcs@exprs[current_rows,marker], 0.99)
-          spillovermarkerscore <- (uncomp_maxspilloverexpression*(spilloverpercentage/100))/uncomp_maxcurrentexpression
-          spilloverscore <- max(spilloverscore, spillovermarkerscore)
-        }
-      }
-      scores[[marker]][sample,scoretypes[5]] <- round(max(1-spilloverscore, 0),2)      
-    }
   }
   
   ## Corrections for Intensity Scores
   scores[[marker]][,scoretypes[1]] <- round(scores[[marker]][,scoretypes[1]] / (max(scores[[marker]][,scoretypes[1]])),2)
   scores[[marker]][scores[[marker]] == "NaN"] <- 0
   
-  ## Calculate & Print Optimal Score
-  scores[[marker]][,scoretypes[6]] <- round(rowMeans(scores[[marker]][,1:5]),2) 
+  ## Determine Optimal Samples per Marker
+  scores[[marker]][,scoretypes[4]] <- round(rowMeans(scores[[marker]][,1:3]),2) 
   bestsamples[[marker]] <- as.numeric(rownames(scores[[marker]])[which.max(scores[[marker]]$`Overall / Weighted Score`)])
-  tkable <- knitr::kable(x = t(as.data.frame(scores[[marker]])), caption = "Table Showing all scores for this Marker, for each Concentration.")
+  
+  ## Generate Density Plot for Marker
+  if (params$VIOLINPLOT) {densityplots[[marker]] <- plotviolinplot(x = as.factor(exprs$FileNum), y = exprs[marker])}
+  else {densityplots[[marker]] <- plotdensityplot(x = exprs_spread["Sample"], y = exprs_spread[marker])}
+}
+
+```
+
+# 6. Generating Tables & Plots
+
+```{r output, warning = FALSE, message = FALSE, results = "asis"}
+## Set up Output Folder
+if (!(dir.exists(file.path(outputdir, "Markers")))) {dir.create(file.path(outputdir, "Markers"))}
+setwd(paste(outputdir,"Markers", sep = "\\"))
+
+## Prepare Spillover Variables and Function
+spilloversummaries <- list()
+spilloverplots <- list()
+finalspilloverplots <- list()
+spillovermatrix <- compensationmatrix
+spillovermatrix[is.na(spillovermatrix)] <- 0  
+plotspilloverplot <- function(x, y) {
+  name_x <- names(x)
+  name_y <- names(y)
+  dat <- data.frame(x = unname(x), y = unname(y))
+  return(ggplot(dat) + geom_bin2d(aes(x, y, fill = ..density..), bins = params$DENSITYSQUARES, show.legend = FALSE) + scale_fill_gradientn(colours = colorRamps::matlab.like2(100))  + labs(title = paste(marker, "-", metalmarkers[[marker]], "x", spillovermarker, "-", metalmarkers[[spillovermarker]]), x = name_x, y = name_y) + theme(text = element_text(size=5), axis.text.x = element_text(size=5, hjust=1), axis.text.y = element_text(size=5, hjust=1)))}
+
+## Main Output Loop
+for (marker in lineage_channels) {
+  cat("## ", paste(marker, "-", metalmarkers[[marker]], "\n"))
+  message("Generating Plots and Tables for Marker ", marker, " (", which(marker == lineage_channels), " out of ", length(lineage_channels), ").")
+  
+  ## Check if Spillover needed
+  if (params$SPILLOVER != "Do Nothing") {
+    if (!(marker %in% spillovermarkers))  {
+      cat("\n- Marker", marker, "was not found in Spillover Matrix. Not checking, scoring or compensating for spillover.", sep = " ")
+    } else {
+      
+      ## Set up Table with Relevant Spillover Matrix Information
+      spillovercontributing <- as.data.frame(t(compensationmatrix[marker, ])) 
+      colnames(spillovercontributing) <- "Percentage Contributing"
+      spilloverreceiving <- data.frame("Percentage Receiving" = compensationmatrix[, marker], row.names = colnames(compensationmatrix))
+      spilloversummary <- data.frame(spillovercontributing, spilloverreceiving)
+      spilloversummary <- spilloversummary[!(apply(spilloversummary, 1, function(x) all(is.na(x)))),]
+      spilloversummary[is.na(spilloversummary)] <- 0
+      spilloversummary$Ratio.of.max.Contributing <- NA
+      spilloversummary$Ratio.of.max.Receiving <- NA
+      
+      ## Spillover Scoring
+      spillover_worst_contributor_score <- 0
+      spillover_worst_receiver_score <- 0
+      spillover_worst_contributor <- NA
+      spillover_worst_receiver <- NA
+      current_rows <- fcs@exprs[,"FileNum"] == bestsamples[marker]
+      uncomp_maxcurrentexpression <- quantile(fcs@exprs[current_rows,marker], 0.98)
+      if (uncomp_maxcurrentexpression == 0) {uncomp_maxcurrentexpression <- quantile(fcs@exprs[current_rows,marker], 0.995)}
+      
+      ## For each Spillover Marker
+      for (spillovermarker in spillovermarkers) {try({
+        if (((spillovermatrix[marker,spillovermarker] > 0) | (spillovermatrix[spillovermarker,marker] > 0)) & (spillovermarker != marker)) {
+          spillovermarker_rows <- fcs@exprs[,"FileNum"] == bestsamples[spillovermarker]
+          uncomp_maxspilloverexpression <- quantile(fcs@exprs[spillovermarker_rows,spillovermarker], 0.98)
+          if (uncomp_maxspilloverexpression == 0) {uncomp_maxspilloverexpression <- quantile(fcs@exprs[spillovermarker_rows,spillovermarker], 0.995)}
+          
+          ## Score Contributing Spillover          
+          spilloverpercentage <- spillovermatrix[marker,spillovermarker]
+          spillovermarkerscore <- (uncomp_maxcurrentexpression*(spilloverpercentage/100))/uncomp_maxspilloverexpression
+          spilloversummary[spillovermarker,"Ratio.of.max.Contributing"] <- round(spillovermarkerscore, 2)
+          spillover_worst_contributor_score <- max(spillover_worst_contributor_score, round(spillovermarkerscore, 2))
+          if (spillover_worst_contributor_score == round(spillovermarkerscore,2)) {spillover_worst_contributor <- spillovermarker}
+          
+          ## Score Receiving Spillover
+          spilloverpercentage <- spillovermatrix[spillovermarker,marker]
+          spillovermarkerscore <- (uncomp_maxspilloverexpression*(spilloverpercentage/100))/uncomp_maxcurrentexpression
+          spilloversummary[spillovermarker,"Ratio.of.max.Receiving"] <- round(spillovermarkerscore, 2)
+          spillover_worst_receiver_score <- max(spillover_worst_receiver_score, round(spillovermarkerscore, 2))
+          if (spillover_worst_receiver_score == round(spillovermarkerscore,2)) {spillover_worst_receiver <- spillovermarker}
+          
+          
+          ## Generate Spillover Plot between two markers
+          spilloverplots[[marker]][[spillovermarker]] <- plotspilloverplot(x = exprs[marker], y = exprs[spillovermarker])
+        }
+      })}
+      
+      ## Print Spillover Summary for this Marker
+      spilloversummaries[[marker]] <- spilloversummary
+      spilloversummary <- knitr::kable(spilloversummary, caption = "Table showing the spillover percentages and ratios both to and from other channels")
+      spilloversummary <- kable_styling(spilloversummary, bootstrap_options = c("striped", "hover", "responsive"), full_width = FALSE)
+      print(spilloversummary)
+      cat("Marker Contributing Worst Spillover Relative to this marker:", spillover_worst_contributor, "with ratio of", spillover_worst_contributor_score, "  \n")
+      cat("\n")
+      cat("Marker Receiving Relative Worst Spillover from this marker:", spillover_worst_receiver, "with ratio of", spillover_worst_receiver_score, "  \n")
+      
+      ## Print Spillover Plots for this Marker
+      if (!(is.null(spilloverplots[[marker]]))) {
+        finalspilloverplots[[marker]] <- do.call("grid.arrange", c(spilloverplots[[marker]], ncol = ceiling(sqrt(length(spilloverplots[[marker]])))))
+        
+        ## Save Marker-Specific Spillover Plots and Spillover Summary Tables as output files
+        spilloverplot_filename <- paste("Spillover Plots for Marker ", marker, " - ", metalmarkers[[marker]], ".png", sep = "")
+        suppressMessages(ggsave(plot = finalspilloverplots[[marker]], filename = spilloverplot_filename))
+      }
+      spilloversummarytable_filename <- paste("Spillover Summary for Marker ", marker, " - ", metalmarkers[[marker]], ".tsv", sep = "")
+      write.table(spilloversummaries[[marker]], sep = "\t", col.names = TRUE, file = spilloversummarytable_filename)
+    }
+  }
+  
+  ## Print Base Score Table for this Marker
+  tkable <- knitr::kable(x = t(as.data.frame(scores[[marker]])), caption = "Table Showing all base scores for this Marker, for each Concentration.")
   tkable <- kable_styling(tkable , bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = FALSE)
   print(tkable)
   
-  ## Plot Density Plot for Report
+  ## Print Density Plot for this Marker
   cat("\n- The Following Graph shows the intensity of each Concentration. Red box = Highest Overall Score.")
   if ((params$SPILLOVER == "Give Warnings & Compensate Data") & (marker %in% spillovermarkers)) 
-    {cat("\n- This Graph has been compensated for Spillover effects.")} else {cat("\n- This Graph has NOT been compensated for any Spillover effects.")}
-  densityplot <- plotdensityplot(x = exprs_spread["Sample"], y = exprs_spread[marker])
-  print(densityplot)
+  {cat("\n- This Graph has been compensated for Spillover effects.")} 
+  else {cat("\n- This Graph has NOT been compensated for any Spillover effects.")}
+  print(densityplots[[marker]])
   
-  ## Save Marker-Specific Plot and Score Table as output files
-  ggsave(plot = densityplot, filename = paste("Graph for Marker ", marker, " - ", metalmarkers[[marker]], ".png", sep = ""))
-  write.table(t(as.data.frame(scores[[marker]])), sep = "\t", col.names = TRUE, 
-              file = paste("Scores for Marker ", marker, " - ", metalmarkers[[marker]], ".tsv", sep = ""))}
+  ## Save Marker-Specific Plots and Score Table as output files
+  densityplot_filename <- paste("Expression for Marker ", marker, " - ", metalmarkers[[marker]], ".png", sep = "")
+  suppressMessages(ggsave(plot = densityplots[[marker]], filename = densityplot_filename))
+  scoretable_filename <- paste("Scores for Marker ", marker, " - ", metalmarkers[[marker]], ".tsv", sep = "")
+  write.table(t(as.data.frame(scores[[marker]])), sep = "\t", col.names = TRUE, file = scoretable_filename)
+}
+
+message("\n\nFinishing up by Exporting R Workspace and Finalizing Report...")
 
 ## Write Summary Table
 setwd(outputdir)
@@ -334,10 +406,5 @@ write.table(t(as.data.frame(bestsamples)), sep = "\t", file = "Optimal Marker Co
 
 ## Write R Workspace for future analysis
 save.image(file = "R Workspace.Rdata")
-
-```
-
-```{r, include=FALSE}
-          #cat("\n### Spillover Warning: This Marker is Receiving Spillover from Marker ", spillovermarker, " at percentage ", spilloverpercentage, ".", "\n- For this experiment, ", spilloverpercentage, "% of Marker ", spillovermarker, "'s max expression (", uncomp_maxspilloverexpression, ") is ", uncomp_maxspilloverexpression*(spilloverpercentage/100), ", which is ", spilloverscore, "% of current marker ", marker, "'s max expression (", uncomp_maxcurrentexpression, ").", sep = "" )
 
 ```
