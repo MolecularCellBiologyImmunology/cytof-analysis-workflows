@@ -2,7 +2,14 @@
 title: "CyTOF Data Analysis"
 author: "Michael de Kok"
 date: "September 17th, 2019"
-output: html_document
+output:
+  html_document:
+    toc: yes
+    toc_depth: 2
+    toc_float: TRUE
+    theme: united
+    css: style.css
+    version: 1.4
 ---
 
 

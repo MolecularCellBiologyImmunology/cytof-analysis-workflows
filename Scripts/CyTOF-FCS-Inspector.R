@@ -17,18 +17,12 @@ exprs <- as.data.frame(fcs@exprs)
 if (is.null(exprs$FileNum)) {stop("This Single File was not concatenated using this Script! Please re-concatenate your file using this script.")}
 fcs@parameters@data
 t(summary(exprs))
-samplenumber <- length(unique(exprs$FileNum))for (col in colnames(exprs)) {print(paste(col, length(unique(exprs[,col]))))}
-
-## Pregating
-exprs <- dplyr::filter(exprs, exprs$Ce140Di < 250)
-exprs <- dplyr::filter(exprs, exprs$Ir191Di > 200)
-exprs <- dplyr::filter(exprs, exprs$Ir191Di < 450)
-exprs <- dplyr::filter(exprs, exprs$Y89Di > 10)
+samplenumber <- length(unique(exprs$FileNum))
+for (col in colnames(exprs)) {print(paste(col, length(unique(exprs[,col]))))}
 
 ## Make colnames human readable using information in the parameter data slot
 markers <- gsub(pattern = ".*_", replacement = "", x = as.vector(fcs@parameters@data$desc));
 colnames(exprs)[which(!is.na(markers))] <- markers[which(!is.na(markers))]
-
 
 ## Channel Description
 "Time,Event_length,Center,SampleID,Offset,Width,Residual"
